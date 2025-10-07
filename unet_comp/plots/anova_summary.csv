@@ -1,0 +1,4 @@
+dataset,measure,Effect,F,Num DF,Den DF,Pr > F,N subjects
+PNI,curvature,condition,112.82435737224525,1.0,25.0,9.359785871661123e-11,26
+PNI,gyrification,condition,1026.3215111234535,1.0,25.0,8.054137683282517e-22,26
+PNI,thickness,condition,0.8677636422481632,1.0,25.0,0.3604845239192458,26

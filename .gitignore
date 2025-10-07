@@ -1,0 +1,6 @@
+hippunfold/
+wetruns/test-hippunfold_v*/
+v1-v2_comp/BIDS_*/hippunfold_v2.0.0/
+unet_comp/BIDS_*/
+unet_comp/hippunfold_*/
+.cache/
