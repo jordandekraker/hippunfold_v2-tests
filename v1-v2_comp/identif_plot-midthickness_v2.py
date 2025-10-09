@@ -17,7 +17,7 @@ from statsmodels.formula.api import ols
 # Configuration (edit as needed)
 # ---------------------------------------
 
-dataset = "BIDS_MICs"  
+dataset = "BIDS_MICs"
 LABELS = ["hipp", "dentate"]  # concat order: hipp then dentate
 
 # subject list (space/newline-separated IDs)
@@ -34,7 +34,7 @@ session_pairs = [
 # hippunfold versions
 version_dirs = {
     "v1.5.1": Path(f"/data/mica3/{dataset}/derivatives/hippunfold_v1.3.0/hippunfold"),
-    "v2.0.0": Path(f"/export03/data/opt/hippunfold_v2stable/v1-v2_comp/{dataset}/hippunfold_v2.0.0beta"),
+    "v2.0.0": Path(f"/export03/data/opt/hippunfold_v2-tests/v1-v2_comp/{dataset}/hippunfold_v2.0.0"),
 }
 
 hemi_order  = ["L", "R"]
@@ -325,7 +325,7 @@ cmap = plt.get_cmap(PALETTE, max(len(all_subjects), 1))
 color_lookup = {sid: cmap(i % cmap.N) for i, sid in enumerate(all_subjects)}
 
 def scatter_block(df_sub, value_col, labels, group_cols, title, out_png):
-    plt.figure(figsize=(9.5, 6))
+    plt.figure(figsize=(3, 4))
     xs = np.arange(len(labels))
     for x, lab in zip(xs, labels):
         mask = np.ones(len(df_sub), dtype=bool)
@@ -358,9 +358,7 @@ def scatter_block(df_sub, value_col, labels, group_cols, title, out_png):
         Line2D([0],[0], marker='x', color='black', label='Right (R)', markersize=7, linestyle='None')
     ]
     plt.legend(handles=legend_elems, title="Hemisphere", loc="best", frameon=True)
-    plt.title(title)
     plt.xticks(xs, ["/".join(map(str, lab)) for lab in labels])
-    plt.ylabel(value_col.capitalize())
     plt.grid(alpha=0.2, axis="y")
     plt.tight_layout()
     plt.savefig(out_png, dpi=200)

@@ -57,7 +57,7 @@ color_lookup = {sr: cmap(i % cmap.N) for i, sr in enumerate(sorted(all_subject_r
 # - group mean/SD across BOTH hemispheres (hemi not in group_cols)
 # ---------------------------
 def scatter_block(df_sub, value_col, labels, group_cols, title, out_png):
-    plt.figure(figsize=(10, 6))
+    plt.figure(figsize=(8, 4))
     xs = np.arange(len(labels))
 
     for x, lab in zip(xs, labels):
@@ -92,9 +92,7 @@ def scatter_block(df_sub, value_col, labels, group_cols, title, out_png):
                          ecolor="black", elinewidth=2, capsize=6, capthick=2)
 
     # axis/legend
-    plt.title(title)
     plt.xticks(xs, ["/".join(map(str, lab)) for lab in labels], rotation=0)
-    plt.ylabel(value_col.capitalize())
     plt.grid(alpha=0.2, axis="y")
 
     # hemisphere marker legend

@@ -18,7 +18,7 @@ import statsmodels.formula.api as smf
 # Configuration (edit as needed)
 # ---------------------------------------
 
-dataset     = "BIDS_PNI"
+dataset     = "BIDS_MICs"
 LABELS      = ["hipp", "dentate"]   # concatenation order: hipp then dentate
 hemi_order  = ["L", "R"]
 allowed_den = {"8k", "0p5mm"}
@@ -47,7 +47,7 @@ def resolve_version_root(ver_key: str) -> Path:
         candidates = [
             Path(f"{dataset}/hippunfold_v2.0.0"),  # e.g., BIDS_MICs/hippunfold_v2.0.0/...
             Path(f"/data/mica3/{dataset}/derivatives/hippunfold_v2.0.0"),
-            Path(f"/export03/data/opt/hippunfold_v2stable/v1-v2_comp/{dataset}/hippunfold_v2.0.0beta"),
+            Path(f"/export03/data/opt/hippunfold_v2-tests/v1-v2_comp/{dataset}/hippunfold_v2.0.0"),
         ]
     for c in candidates:
         if c.exists():
@@ -156,7 +156,7 @@ cmap = plt.get_cmap(PALETTE, max(len(all_subjects), 1))
 color_lookup = {sid: cmap(i % cmap.N) for i, sid in enumerate(all_subjects)}
 
 def scatter_block(df_sub, value_col, labels, group_cols, title, out_png):
-    plt.figure(figsize=(9.5, 6))
+    plt.figure(figsize=(3, 4))
     xs = np.arange(len(labels))
     for x, lab in zip(xs, labels):
         mask = np.ones(len(df_sub), dtype=bool)
@@ -186,9 +186,7 @@ def scatter_block(df_sub, value_col, labels, group_cols, title, out_png):
         Line2D([0],[0], marker='x', color='black', label='Right (R)', markersize=7, linestyle='None')
     ]
     plt.legend(handles=legend_elems, title="Hemisphere", loc="best", frameon=True)
-    plt.title(title)
     plt.xticks(xs, ["/".join(map(str, lab)) for lab in labels])
-    plt.ylabel(value_col.replace("_"," ").title())
     plt.grid(alpha=0.2, axis="y")
     plt.tight_layout()
     plt.savefig(out_png, dpi=200)
