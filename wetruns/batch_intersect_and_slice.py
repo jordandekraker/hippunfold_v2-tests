@@ -199,41 +199,67 @@ def sample_mask_on_plane_XYZ(mask_xyz: np.ndarray, affine: np.ndarray, plane_wor
 
 # -------------------- plotting (95% intensity range) --------------------
 
-def plot_slice_two_overlays(slice_img: np.ndarray,
-                            mask_hipp: np.ndarray,
-                            mask_dent: np.ndarray,
-                            out_path: str,
-                            title: str,
-                            alpha: float = 0.6,
-                            underlay_from_volume: np.ndarray = None):
+def plot_slice_four_overlays(slice_img: np.ndarray,
+                             mask_hipp_inner: np.ndarray,
+                             mask_hipp_mid: np.ndarray,
+                             mask_hipp_outer: np.ndarray,
+                             mask_dent: np.ndarray,
+                             out_path: str,
+                             alpha: float = 0.6,
+                             underlay_from_volume: np.ndarray = None):
     """
     Plot with robust windowing: vmin/vmax = 2.5th/97.5th percentiles of the *volume* (95% range).
+
+    Colors:
+      - inner: yellow
+      - midthickness: orange
+      - outer: red
+      - dentate: purple
     """
     if underlay_from_volume is not None:
-        vmin, vmax = np.percentile(underlay_from_volume[np.isfinite(underlay_from_volume)], [2.5, 97.5])
+        vmin, vmax = np.percentile(
+            underlay_from_volume[np.isfinite(underlay_from_volume)], [2.5, 97.5]
+        )
     else:
-        vmin, vmax = np.percentile(slice_img[np.isfinite(slice_img)], [2.5, 97.5])
+        vmin, vmax = np.percentile(
+            slice_img[np.isfinite(slice_img)], [2.5, 97.5]
+        )
 
     fig, ax = plt.subplots(figsize=(7, 7))
-    ax.imshow(slice_img, origin='lower', cmap='gray', vmin=vmin, vmax=vmax, interpolation='nearest')
+    ax.imshow(slice_img, origin='lower', cmap='gray',
+              vmin=vmin, vmax=vmax, interpolation='nearest')
 
-    # Yellow HIPPO
-    hipp_rgba = np.zeros(mask_hipp.shape + (4,), dtype=float)
-    hipp_rgba[..., 0:2] = 1.0
-    hipp_rgba[..., 3] = mask_hipp.astype(float) * alpha
-    ax.imshow(hipp_rgba, origin='lower', interpolation='nearest')
+    # Yellow inner hippocampus (R=1, G=1, B=0)
+    hipp_in_rgba = np.zeros(mask_hipp_inner.shape + (4,), dtype=float)
+    hipp_in_rgba[..., 0:2] = 1.0
+    hipp_in_rgba[..., 3] = mask_hipp_inner.astype(float) * alpha
+    ax.imshow(hipp_in_rgba, origin='lower', interpolation='nearest')
 
-    # Purple DENTATE
+    # Orange midthickness (R=1, G=0.5, B=0)
+    hipp_mid_rgba = np.zeros(mask_hipp_mid.shape + (4,), dtype=float)
+    hipp_mid_rgba[..., 0] = 1.0
+    hipp_mid_rgba[..., 1] = 0.5
+    hipp_mid_rgba[..., 3] = mask_hipp_mid.astype(float) * alpha
+    ax.imshow(hipp_mid_rgba, origin='lower', interpolation='nearest')
+
+    # Red outer hippocampus (R=1, G=0, B=0)
+    hipp_out_rgba = np.zeros(mask_hipp_outer.shape + (4,), dtype=float)
+    hipp_out_rgba[..., 0] = 1.0
+    hipp_out_rgba[..., 3] = mask_hipp_outer.astype(float) * alpha
+    ax.imshow(hipp_out_rgba, origin='lower', interpolation='nearest')
+
+    # Purple dentate (R=1, B=1)
     dent_rgba = np.zeros(mask_dent.shape + (4,), dtype=float)
     dent_rgba[..., 0] = 1.0
     dent_rgba[..., 2] = 1.0
     dent_rgba[..., 3] = mask_dent.astype(float) * alpha
     ax.imshow(dent_rgba, origin='lower', interpolation='nearest')
 
-    ax.set_title(title); ax.set_axis_off()
+    ax.set_axis_off()
     Path(out_path).parent.mkdir(parents=True, exist_ok=True)
     plt.savefig(out_path, dpi=200, bbox_inches='tight')
     plt.close(fig)
+
 
 # -------------------- discovery (T1w/T2w; crop variants) --------------------
 
@@ -250,11 +276,14 @@ def find_nifti_for_sub(sub_dir: Path):
     return nii, space_token
 
 def expected_surface_paths(sub_dir: Path, hemi: str, den: str, space_token: str):
+    """Return paths for hipp midthickness, inner, outer, and dentate."""  
     surf = sub_dir / "surf"
     sub = sub_dir.name
-    hipp = surf / f"{sub}_hemi-{hemi}_space-{space_token}_den-{den}_label-hipp_midthickness.surf.gii"
-    dent = surf / f"{sub}_hemi-{hemi}_space-{space_token}_den-{den}_label-dentate_midthickness.surf.gii"
-    return hipp, dent
+    hipp_mid = surf / f"{sub}_hemi-{hemi}_space-{space_token}_den-{den}_label-hipp_midthickness.surf.gii"
+    hipp_in  = surf / f"{sub}_hemi-{hemi}_space-{space_token}_den-{den}_label-hipp_inner.surf.gii"
+    hipp_out = surf / f"{sub}_hemi-{hemi}_space-{space_token}_den-{den}_label-hipp_outer.surf.gii"
+    dent     = surf / f"{sub}_hemi-{hemi}_space-{space_token}_den-{den}_label-dentate_midthickness.surf.gii"
+    return hipp_mid, hipp_in, hipp_out, dent 
 
 def get_cond_dir(root: Path, cond: str) -> Path:
     """
@@ -279,42 +308,80 @@ def get_cond_dir(root: Path, cond: str) -> Path:
 
 # -------------------- per-case: plane slice --------------------
 
-def process_case_plane_slice(nii_path: Path, gii_hipp_path: Path, gii_dent_path: Path,
-                             out_png: Path, dist_thresh_vox=0.9, margin_vox=1, slice_size=(512, 512)):
+def process_case_plane_slice(nii_path: Path,
+                             gii_hipp_mid_path: Path, 
+                             gii_hipp_inner_path: Path,
+                             gii_hipp_outer_path: Path,
+                             gii_dent_path: Path,
+                             out_png: Path,
+                             dist_thresh_vox=0.9,
+                             margin_vox=1,
+                             slice_size=(512, 512)):
     # 1) canonical volume (X,Y,Z)
     _, data_xyz, affine = load_nifti_canonical(str(nii_path))
 
     # 2) load surfaces, auto-orient, map to voxel
-    v_hipp_w, f_hipp = load_gifti_mesh(str(gii_hipp_path))
-    v_dent_w, f_dent = load_gifti_mesh(str(gii_dent_path))
-    v_hipp_w = auto_orient_gifti_vertices(v_hipp_w, affine, data_xyz.shape)
-    v_dent_w = auto_orient_gifti_vertices(v_dent_w, affine, data_xyz.shape)
-    v_hipp_vox = world_to_voxel(affine, v_hipp_w)
-    v_dent_vox = world_to_voxel(affine, v_dent_w)
+    v_hipp_mid_w, f_hipp_mid = load_gifti_mesh(str(gii_hipp_mid_path))
+    v_hipp_in_w,  f_hipp_in  = load_gifti_mesh(str(gii_hipp_inner_path))
+    v_hipp_out_w, f_hipp_out = load_gifti_mesh(str(gii_hipp_outer_path))
+    v_dent_w,     f_dent     = load_gifti_mesh(str(gii_dent_path))
+
+    v_hipp_mid_w = auto_orient_gifti_vertices(v_hipp_mid_w, affine, data_xyz.shape)
+    v_hipp_in_w  = auto_orient_gifti_vertices(v_hipp_in_w,  affine, data_xyz.shape)
+    v_hipp_out_w = auto_orient_gifti_vertices(v_hipp_out_w, affine, data_xyz.shape)
+    v_dent_w     = auto_orient_gifti_vertices(v_dent_w,     affine, data_xyz.shape)
+
+    v_hipp_mid_vox = world_to_voxel(affine, v_hipp_mid_w)
+    v_hipp_in_vox  = world_to_voxel(affine, v_hipp_in_w)
+    v_hipp_out_vox = world_to_voxel(affine, v_hipp_out_w)
+    v_dent_vox     = world_to_voxel(affine, v_dent_w)
 
     # 3) masks on same grid (X,Y,Z)
-    mask_hipp = intersect_mask_from_surface_voxel_XYZ(v_hipp_vox, f_hipp, data_xyz.shape,
-                                                      margin_vox=margin_vox, dist_thresh_vox=dist_thresh_vox)
-    mask_dent = intersect_mask_from_surface_voxel_XYZ(v_dent_vox, f_dent, data_xyz.shape,
-                                                      margin_vox=margin_vox, dist_thresh_vox=dist_thresh_vox)
+    # Use midthickness for defining the plane, but inner/outer for overlays
+    mask_hipp_mid = intersect_mask_from_surface_voxel_XYZ(
+        v_hipp_mid_vox, f_hipp_mid, data_xyz.shape,
+        margin_vox=margin_vox, dist_thresh_vox=dist_thresh_vox
+    )
+    mask_hipp_in = intersect_mask_from_surface_voxel_XYZ(
+        v_hipp_in_vox, f_hipp_in, data_xyz.shape,
+        margin_vox=margin_vox, dist_thresh_vox=dist_thresh_vox
+    )
+    mask_hipp_out = intersect_mask_from_surface_voxel_XYZ(
+        v_hipp_out_vox, f_hipp_out, data_xyz.shape,
+        margin_vox=margin_vox, dist_thresh_vox=dist_thresh_vox
+    )
+    mask_dent = intersect_mask_from_surface_voxel_XYZ(
+        v_dent_vox, f_dent, data_xyz.shape,
+        margin_vox=margin_vox, dist_thresh_vox=dist_thresh_vox
+    )
 
-    # 4) best-fit plane from HIPPO mask (world)
-    origin_w, _, u_w, v_w = best_fit_plane_from_mask_XYZ(mask_hipp, affine)
+    # 4) best-fit plane from HIPPO midthickness mask (world)
+    origin_w, _, u_w, v_w = best_fit_plane_from_mask_XYZ(mask_hipp_mid, affine)
 
     # 5) reslice once
-    slice_img, plane_world = reslice_along_plane_XYZ(data_xyz, affine, origin_w, u_w, v_w,
-                                                     out_shape=slice_size, field_of_view_mm=None, order=1)
+    slice_img, plane_world = reslice_along_plane_XYZ(
+        data_xyz, affine, origin_w, u_w, v_w,
+        out_shape=slice_size, field_of_view_mm=None, order=1
+    )
 
-    # 6) sample both overlays on that plane
-    ov_hipp = sample_mask_on_plane_XYZ(mask_hipp, affine, plane_world)
-    ov_dent = sample_mask_on_plane_XYZ(mask_dent, affine, plane_world)
+    # 6) sample overlays on that plane
+    ov_hipp_mid = sample_mask_on_plane_XYZ(mask_hipp_mid, affine, plane_world)
+    ov_hipp_in  = sample_mask_on_plane_XYZ(mask_hipp_in,  affine, plane_world)
+    ov_hipp_out = sample_mask_on_plane_XYZ(mask_hipp_out, affine, plane_world)
+    ov_dent     = sample_mask_on_plane_XYZ(mask_dent,     affine, plane_world)
 
     # 7) plot with robust 95% windowing (percentiles from full volume)
-    title = f"{gii_hipp_path.name} + dentate on {nii_path.name}"
-    plot_slice_two_overlays(slice_img, ov_hipp, ov_dent, str(out_png), title,
-                            underlay_from_volume=data_xyz)
+    plot_slice_four_overlays(
+        slice_img,
+        mask_hipp_inner=ov_hipp_in,
+        mask_hipp_mid=ov_hipp_mid,
+        mask_hipp_outer=ov_hipp_out,
+        mask_dent=ov_dent,
+        out_path=str(out_png),
+        underlay_from_volume=data_xyz,
+    )
 
-# -------------------- CLI loop (usage unchanged; flat '{cond}_...' filenames) --------------------
+# -------------------- CLI loop (flat '{cond}_...' filenames) --------------------
 
 def main():
     ap = argparse.ArgumentParser(description="Plane slice overlays in canonical RAS+ with 95% intensity window.")
@@ -322,7 +389,7 @@ def main():
     ap.add_argument("--out", required=True)
     ap.add_argument("--hemi", default="L", choices=["L", "R"])
     ap.add_argument("--den", default="8k", choices=["8k", "0p5mm"])
-    ap.add_argument("--dist-thresh-vox", type=float, default=0.5)
+    ap.add_argument("--dist-thresh-vox", type=float, default=0.4)
     ap.add_argument("--margin-vox", type=int, default=1)
     ap.add_argument("--slice-size", type=int, nargs=2, default=[512, 512])
     args = ap.parse_args()
@@ -340,19 +407,38 @@ def main():
         sub_dir = Path(subs[0])
         try:
             nii, space_token = find_nifti_for_sub(sub_dir)
-            gii_hipp, gii_dent = expected_surface_paths(sub_dir, args.hemi, args.den, space_token)
-            missing = [p for p in (nii, gii_hipp, gii_dent) if not Path(p).exists()]
+            (
+                gii_hipp_mid,
+                gii_hipp_inner,
+                gii_hipp_outer,
+                gii_dent,
+            ) = expected_surface_paths(sub_dir, args.hemi, args.den, space_token)
+
+            missing = [
+                p for p in (nii, gii_hipp_mid, gii_hipp_inner, gii_hipp_outer, gii_dent)
+                if not Path(p).exists()
+            ]
             if missing:
                 warnings.warn(f"[{cond}] missing:\n  " + "\n  ".join(map(str, missing)))
                 continue
 
             # Flat filename with {cond}
-            out_png = outdir / f"{cond}_{sub_dir.name}_hemi-{args.hemi}_space-{space_token}_den-{args.den}_hipp-dent_planeslice.png"
+            out_png = outdir / (
+                f"{cond}_{sub_dir.name}_hemi-{args.hemi}_space-{space_token}_"
+                f"den-{args.den}_hipp-dent_planeslice.png"
+            )
             print(f"[INFO] {cond}: {sub_dir.name} ({space_token}) -> {out_png}")
-            process_case_plane_slice(Path(nii), Path(gii_hipp), Path(gii_dent), out_png,
-                                     dist_thresh_vox=args.dist_thresh_vox,
-                                     margin_vox=args.margin_vox,
-                                     slice_size=tuple(args.slice_size))
+            process_case_plane_slice(
+                Path(nii),
+                Path(gii_hipp_mid),
+                Path(gii_hipp_inner),
+                Path(gii_hipp_outer),
+                Path(gii_dent),
+                out_png,
+                dist_thresh_vox=args.dist_thresh_vox,
+                margin_vox=args.margin_vox,
+                slice_size=tuple(args.slice_size),
+            )
         except Exception as e:
             warnings.warn(f"[{cond}] failed: {e}")
 
