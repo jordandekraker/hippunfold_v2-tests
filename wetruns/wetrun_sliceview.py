@@ -126,20 +126,53 @@ def intersect_mask_from_surface_voxel_XYZ(vertices_vox: np.ndarray,
 
 def best_fit_plane_from_mask_XYZ(mask_xyz: np.ndarray, affine: np.ndarray):
     """
-    Fit plane in world coords from mask (X,Y,Z). Returns (origin_world, normal_world, u_world, v_world).
+    Fit a plane in world coords from mask (X,Y,Z), constrained to be
+    parallel to the x (sagittal) direction.
+
+    Returns:
+        ctr   : point on the plane (world coords)
+        n     : plane normal (world coords, n_x ~= 0)
+        u, v  : orthonormal in-plane basis vectors (world coords)
+                with u aligned to x as much as possible.
     """
-    idx = np.argwhere(mask_xyz)  # columns are (x,y,z)
+    idx = np.argwhere(mask_xyz)  # columns are (x,y,z) in voxel space
     if idx.size == 0:
         raise ValueError("Mask empty; no intersecting voxels.")
+
+    # voxel center coordinates
     ijk = idx.astype(float) + 0.5
-    xyz = voxel_to_world(affine, ijk)
+    xyz = voxel_to_world(affine, ijk)  # (N, 3) world coords
+
+    # Plane center = mean of points
     ctr = xyz.mean(0)
-    Xc = xyz - ctr
-    _, _, Vt = np.linalg.svd(Xc, full_matrices=False)
-    n = Vt[-1]; n /= (np.linalg.norm(n) + 1e-12)
-    u = Vt[0];  u /= (np.linalg.norm(u) + 1e-12)
-    v = np.cross(n, u); v /= (np.linalg.norm(v) + 1e-12)
+
+    # --- Constrain plane normal to lie in the YZ-subspace (n_x = 0) ---
+    # Work with demeaned YZ coordinates
+    yz = xyz[:, 1:3] - ctr[1:3]  # (N, 2)
+
+    # PCA in the YZ plane: smallest-variance direction in YZ becomes normal_yz
+    # This minimizes squared distances to a plane whose normal has n_x = 0.
+    _, _, Vt_yz = np.linalg.svd(yz, full_matrices=False)
+    normal_yz = Vt_yz[-1]  # (2,) direction of least variance
+
+    # Build 3D normal with zero x component
+    n = np.array([0.0, normal_yz[0], normal_yz[1]], dtype=float)
+    n /= (np.linalg.norm(n) + 1e-12)
+
+    # --- In-plane basis vectors ---
+    # Start with x-axis as preferred in-plane direction
+    u = np.array([1.0, 0.0, 0.0], dtype=float)
+
+    # Numerical safety: ensure u is orthogonal to n
+    u = u - np.dot(u, n) * n
+    u /= (np.linalg.norm(u) + 1e-12)
+
+    # v completes right-handed orthonormal basis
+    v = np.cross(n, u)
+    v /= (np.linalg.norm(v) + 1e-12)
+
     return ctr, n, u, v
+
 
 # -------------------- reslice along plane (data (X,Y,Z)) --------------------
 
@@ -381,22 +414,46 @@ def process_case_plane_slice(nii_path: Path,
         underlay_from_volume=data_xyz,
     )
 
-# -------------------- CLI loop (flat '{cond}_...' filenames) --------------------
 
-def main():
-    ap = argparse.ArgumentParser(description="Plane slice overlays in canonical RAS+ with 95% intensity window.")
-    ap.add_argument("--root", required=True)
-    ap.add_argument("--out", required=True)
-    ap.add_argument("--hemi", default="L", choices=["L", "R"])
-    ap.add_argument("--den", default="8k", choices=["8k", "0p5mm"])
-    ap.add_argument("--dist-thresh-vox", type=float, default=0.4)
-    ap.add_argument("--margin-vox", type=int, default=1)
-    ap.add_argument("--slice-size", type=int, nargs=2, default=[512, 512])
-    args = ap.parse_args()
 
-    conditions = ["highresMRI", "lowresMRI", "thickSlice", "atrophy", "neonate"]
-    root = Path(args.root)
-    outdir = Path(args.out); outdir.mkdir(parents=True, exist_ok=True)
+import glob
+import warnings
+from pathlib import Path
+
+# assume these are defined elsewhere in your script:
+# from your_module import get_cond_dir, find_nifti_for_sub, expected_surface_paths, process_case_plane_slice
+
+# -------------------- Config --------------------
+
+HEMI = "L"
+DIST_THRESH_VOX = 0.4
+MARGIN_VOX = 1
+SLICE_SIZE = (512, 512)
+
+SETUPS = [
+    {
+        "root": Path("test-hippunfold_v2.0.0"),
+        "out": Path("figs_2.0.0"),
+        "den": "8k",
+        "conditions": ["highresMRI", "lowresMRI", "thickSlice", "atrophy", "neonate", "mouse", "marmoset"],
+    },
+    {
+        "root": Path("test-hippunfold_v1.5.1"),
+        "out": Path("figs_v1.5.1"),
+        "den": "0p5mm",
+        "conditions": ["highresMRI", "lowresMRI", "thickSlice"],
+    },
+]
+
+
+for setup in SETUPS:
+    root = setup["root"]
+    outdir = setup["out"]
+    den = setup["den"]
+    conditions = setup["conditions"]
+
+    outdir.mkdir(parents=True, exist_ok=True)
+    print(f"[INFO] Processing setup: root={root}, out={outdir}, den={den}")
 
     for cond in conditions:
         cond_dir = get_cond_dir(root, cond)
@@ -404,6 +461,7 @@ def main():
         if not subs:
             warnings.warn(f"[{cond}] no subjects under {cond_dir}")
             continue
+
         sub_dir = Path(subs[0])
         try:
             nii, space_token = find_nifti_for_sub(sub_dir)
@@ -412,7 +470,7 @@ def main():
                 gii_hipp_inner,
                 gii_hipp_outer,
                 gii_dent,
-            ) = expected_surface_paths(sub_dir, args.hemi, args.den, space_token)
+            ) = expected_surface_paths(sub_dir, HEMI, den, space_token)
 
             missing = [
                 p for p in (nii, gii_hipp_mid, gii_hipp_inner, gii_hipp_outer, gii_dent)
@@ -422,10 +480,9 @@ def main():
                 warnings.warn(f"[{cond}] missing:\n  " + "\n  ".join(map(str, missing)))
                 continue
 
-            # Flat filename with {cond}
             out_png = outdir / (
-                f"{cond}_{sub_dir.name}_hemi-{args.hemi}_space-{space_token}_"
-                f"den-{args.den}_hipp-dent_planeslice.png"
+                f"{cond}_{sub_dir.name}_hemi-{HEMI}_space-{space_token}_"
+                f"den-{den}_hipp-dent_planeslice.png"
             )
             print(f"[INFO] {cond}: {sub_dir.name} ({space_token}) -> {out_png}")
             process_case_plane_slice(
@@ -435,14 +492,11 @@ def main():
                 Path(gii_hipp_outer),
                 Path(gii_dent),
                 out_png,
-                dist_thresh_vox=args.dist_thresh_vox,
-                margin_vox=args.margin_vox,
-                slice_size=tuple(args.slice_size),
+                dist_thresh_vox=DIST_THRESH_VOX,
+                margin_vox=MARGIN_VOX,
+                slice_size=SLICE_SIZE,
             )
         except Exception as e:
             warnings.warn(f"[{cond}] failed: {e}")
 
-    print("[DONE]")
-
-if __name__ == "__main__":
-    main()
+print("[DONE]")
