@@ -1,5 +1,5 @@
-Analysis started at 2025-11-27 10:45:00
-Log file: plots_synth/analysis_log_20251127_104500.txt
+Analysis started at 2025-11-27 11:04:34
+Log file: plots_synth/analysis_log_20251127_110434.txt
 ============================================================
 
 ============================================================
@@ -8,9 +8,11 @@ Processing dataset: BIDS_MICs
 Subjects: 50
 Session pairs: [('ses-01', 'ses-02')]
 Wrote raw metrics: plots_synth/metrics_per_subject_versions_BIDS_MICs_pairs_raw.csv
-ANY-below-threshold consistency filtering @ 0.90
-  Good groups (kept): 100 | Bad groups (excluded): 0
-Identifiability leak check: OK (no bad subjects remain).
+Filtering @ CONSISTENCY >= 0.80 AND IDENT >= 0.50
+  Good groups kept: 100
+  Excluded for consistency: 0 | Excluded for ident: 0
+Leak check: OK (no bad subjects remain).
+Wrote filtered metrics (for plots/stats): plots_synth/metrics_per_subject_versions_BIDS_MICs_pairs_filtered.csv
 Saved: plots_synth/consistency_scatter_BIDS_MICs.png
 Saved: plots_synth/identifiability_scatter_BIDS_MICs.png
 Saved: plots_synth/cellquality_scatter_BIDS_MICs.png
@@ -50,9 +52,11 @@ Processing dataset: BIDS_PNI
 Subjects: 10
 Session pairs: [('ses-01', 'ses-02'), ('ses-02', 'ses-03'), ('ses-03', 'ses-01')]
 Wrote raw metrics: plots_synth/metrics_per_subject_versions_BIDS_PNI_pairs_raw.csv
-ANY-below-threshold consistency filtering @ 0.90
-  Good groups (kept): 34 | Bad groups (excluded): 0
-Identifiability leak check: OK (no bad subjects remain).
+Filtering @ CONSISTENCY >= 0.80 AND IDENT >= 0.50
+  Good groups kept: 37
+  Excluded for consistency: 1 | Excluded for ident: 1
+Leak check: OK (no bad subjects remain).
+Wrote filtered metrics (for plots/stats): plots_synth/metrics_per_subject_versions_BIDS_PNI_pairs_filtered.csv
 Saved: plots_synth/consistency_scatter_BIDS_PNI.png
 Saved: plots_synth/identifiability_scatter_BIDS_PNI.png
 Saved: plots_synth/cellquality_scatter_BIDS_PNI.png
@@ -60,33 +64,33 @@ Saved: plots_synth/corrmat_default_BIDS_PNI.png
 Saved: plots_synth/corrmat_synthlayer_BIDS_PNI.png
 
 Repeated-measures ANOVA for consistency (within: version, hemi)
-Subjects total: 10 | complete for RM: 7
+Subjects total: 10 | complete for RM: 8
 Version levels: ['default', 'synthlayer']
 Hemisphere levels: ['L', 'R']
                F Value  Num DF  Den DF    Pr > F
-version       9.668117     1.0     6.0  0.020866
-hemi          0.489109     1.0     6.0  0.510514
-version:hemi  0.533996     1.0     6.0  0.492468
+version       9.913714     1.0     7.0  0.016184
+hemi          1.641792     1.0     7.0  0.240890
+version:hemi  1.709540     1.0     7.0  0.232349
 
 Repeated-measures ANOVA for identifiability (within: version, hemi)
-Subjects total: 10 | complete for RM: 7
+Subjects total: 10 | complete for RM: 8
 Version levels: ['default', 'synthlayer']
 Hemisphere levels: ['L', 'R']
-               F Value  Num DF  Den DF    Pr > F
-version       0.116652     1.0     6.0  0.744338
-hemi          2.480750     1.0     6.0  0.166315
-version:hemi  0.314062     1.0     6.0  0.595488
+                 F Value  Num DF  Den DF        Pr > F
+version       308.189371     1.0     7.0  4.792488e-07
+hemi          176.368787     1.0     7.0  3.211361e-06
+version:hemi  284.930340     1.0     7.0  6.271753e-07
 
 Repeated-measures ANOVA for cell_quality (within: version, hemi)
-Subjects total: 10 | complete for RM: 7
+Subjects total: 10 | complete for RM: 8
 Version levels: ['default', 'synthlayer']
 Hemisphere levels: ['L', 'R']
                F Value  Num DF  Den DF    Pr > F
-version       1.548641     1.0     6.0  0.259742
-hemi          1.761331     1.0     6.0  0.232725
-version:hemi  0.015085     1.0     6.0  0.906261
+version       2.971557     1.0     7.0  0.128401
+hemi          2.019742     1.0     7.0  0.198247
+version:hemi  0.183203     1.0     7.0  0.681496
 
 ============================================================
 All datasets processed successfully!
 ============================================================
-Analysis completed at 2025-11-27 10:45:50
+Analysis completed at 2025-11-27 11:05:25

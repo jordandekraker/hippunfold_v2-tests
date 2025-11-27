@@ -35,7 +35,8 @@ HEMI_MARK = {"L": "o", "R": "x"}
 RNG = np.random.default_rng(42)
 
 # Filtering
-CONSISTENCY_THRESHOLD = 0.9  # exclude subject/hemi/version if mean consistency < threshold
+CONSISTENCY_THRESHOLD = 0.8  # exclude subject/hemi/version if mean consistency < threshold
+IDENTIFIABILITY_THRESHOLD = 0.5  
 
 # ========================
 # Logging
@@ -492,58 +493,84 @@ for dataset in DATASETS:
     print(f"Wrote raw metrics: {raw_csv_path}")
     
     # ========================
-    # Consistency-based filtering (exclude ANY < threshold)
+    # Consistency & Identifiability filtering (ANY < threshold => exclude)
     # ========================
     if not df_cons.empty:
-        # --- 1) Normalize key columns across ALL involved frames ---
         key_cols = ["version", "hemi", "subject_id"]
+
+        # 1) Normalize key columns across frames
         for df_ in (df_cons, df_ident, df_quality):
             for k in key_cols:
                 df_[k] = df_[k].astype(str).str.strip()
-    
+
+        # 2) Compute per-group mins for both measures
         cons = df_cons.dropna(subset=["consistency"]).copy()
-    
-        # --- 2) Compute per-group min (keep only those with min >= threshold) ---
-        grp = (cons.groupby(key_cols, as_index=False)
-                   .agg(consistency_min=("consistency", "min"),
-                        consistency_mean=("consistency", "mean")))
-    
-        good_keys = grp.loc[grp["consistency_min"] >= CONSISTENCY_THRESHOLD, key_cols]
-        bad_keys  = grp.loc[grp["consistency_min"] <  CONSISTENCY_THRESHOLD,  key_cols]
-    
-        print(f"ANY-below-threshold consistency filtering @ {CONSISTENCY_THRESHOLD:.2f}")
-        print(f"  Good groups (kept): {len(good_keys)} | Bad groups (excluded): {len(bad_keys)}")
-    
-        # --- 3) Filter with INNER MERGE on keys (safer than tuple-masks) ---
+        cons_grp = (cons.groupby(key_cols, as_index=False)
+                        .agg(consistency_min=("consistency", "min"),
+                            consistency_mean=("consistency", "mean")))
+
+        ident = df_ident.dropna(subset=["identifiability"]).copy()
+        ident_grp = (ident.groupby(key_cols, as_index=False)
+                        .agg(ident_max=("identifiability", "max"),
+                            ident_mean=("identifiability", "mean")))
+
+        # 3) Good keys for each threshold
+        good_cons_keys  = cons_grp.loc[cons_grp["consistency_min"] >= CONSISTENCY_THRESHOLD, key_cols]
+        bad_cons_keys   = cons_grp.loc[cons_grp["consistency_min"]  < CONSISTENCY_THRESHOLD,  key_cols]
+
+        good_ident_keys = ident_grp.loc[ident_grp["ident_max"] <= IDENTIFIABILITY_THRESHOLD, key_cols]
+        bad_ident_keys  = ident_grp.loc[ident_grp["ident_max"]  > IDENTIFIABILITY_THRESHOLD,  key_cols]
+
+        # 4) Intersection: must pass BOTH thresholds
+        good_keys = good_cons_keys.merge(good_ident_keys, on=key_cols, how="inner")
+        print(f"Filtering @ CONSISTENCY >= {CONSISTENCY_THRESHOLD:.2f} AND IDENT >= {IDENTIFIABILITY_THRESHOLD:.2f}")
+        print(f"  Good groups kept: {len(good_keys)}")
+        print(f"  Excluded for consistency: {len(bad_cons_keys)} | Excluded for ident: {len(bad_ident_keys)}")
+
+        # 5) Filter frames with inner merge on keys
         df_ident_f   = df_ident.merge(good_keys, on=key_cols, how="inner")
         df_quality_f = df_quality.merge(good_keys, on=key_cols, how="inner")
-    
-        # --- 4) Sanity check: do any 'bad' keys still appear in identifiability? ---
-        leak_ident = (df_ident_f.merge(bad_keys.assign(_bad=1), on=key_cols, how="left")
-                                 .query("_bad == 1"))
-        if len(leak_ident):
-            print("[WARN] Bad subjects still present in identifiability after filtering:")
-            print(leak_ident[key_cols].drop_duplicates().head(10))
+
+        # 6) Also filter the consistency rows themselves:
+        #    - keep only good subjects (intersection)
+        #    - drop individual rows where consistency < CONSISTENCY_THRESHOLD
+        df_cons_f = (df_cons.merge(good_keys, on=key_cols, how="inner")
+                            .query("consistency >= @CONSISTENCY_THRESHOLD")
+                            .copy())
+
+        # Sanity checks
+        leak_ident = (df_ident_f.merge(bad_cons_keys.assign(_bad_cons=1), on=key_cols, how="left")
+                                .merge(bad_ident_keys.assign(_bad_ident=1), on=key_cols, how="left"))
+        if (("_bad_cons" in leak_ident and leak_ident["_bad_cons"].eq(1).any()) or
+            ("_bad_ident" in leak_ident and leak_ident["_bad_ident"].eq(1).any())):
+            print("[WARN] Bad subjects still present in identifiability after filtering.")
         else:
-            print("Identifiability leak check: OK (no bad subjects remain).")
-    
+            print("Leak check: OK (no bad subjects remain).")
+
     else:
         print("No consistency rows found; skipping filtering.")
         df_ident_f = df_ident.copy()
         df_quality_f = df_quality.copy()
-    
-    # Build filtered df_all for plots/stats (consistency unfiltered; others filtered)
+        df_cons_f = df_cons.copy()
+
+    # ========================
+    # Build filtered df_all for plots/stats
+    # (now consistency is filtered too)
+    # ========================
     df_all = pd.concat([
-        df_cons.assign(measure="consistency", value=df_cons["consistency"])[
+        df_cons_f.assign(measure="consistency", value=df_cons_f["consistency"])[
             ["version", "hemi", "subject_id", "pair", "measure", "value"]],
         df_ident_f.assign(measure="identifiability", value=df_ident_f["identifiability"])[
             ["version", "hemi", "subject_id", "pair", "measure", "value"]],
         df_quality_f.copy().assign(measure="cell_quality",
-                                   pair=lambda d: d["session"],
-                                   value=lambda d: d["quality_mean"])[
+                                pair=lambda d: d["session"],
+                                value=lambda d: d["quality_mean"])[
             ["version", "hemi", "subject_id", "pair", "measure", "value"]]
     ], ignore_index=True)
 
+    filtered_csv_path = f"{OUTDIR}/metrics_per_subject_versions_{dataset}_pairs_filtered.csv"
+    df_all.to_csv(filtered_csv_path, index=False)
+    print(f"Wrote filtered metrics (for plots/stats): {filtered_csv_path}")
 
     # ========================
     # Plots
