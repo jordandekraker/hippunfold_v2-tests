@@ -496,12 +496,9 @@ for dataset in DATASETS:
     # ========================
     if not df_cons.empty:
         grp = (df_cons.groupby(["version", "hemi", "subject_id"], as_index=False)["consistency"]
-                    .mean()
+                    .min()
                     .rename(columns={"consistency": "consistency_mean"}))
-        grp2 = (df_ident.groupby(["version", "hemi", "subject_id"], as_index=False)["identifiability"]
-                    .mean()
-                    .rename(columns={"identifiability": "identifiability_mean"}))
-        good = grp[((grp["consistency_mean"] >= CONSISTENCY_THRESHOLD) | (grp2["identifiability_mean"] >= 0.5))]
+        good = grp[grp["consistency_mean"] >= CONSISTENCY_THRESHOLD]
         bad = grp[grp["consistency_mean"] < CONSISTENCY_THRESHOLD]
         print(f"Mean consistency filtering @ {CONSISTENCY_THRESHOLD:.2f}")
         print(f"  Good groups (kept): {len(good)} | Bad groups (excluded): {len(bad)}")
