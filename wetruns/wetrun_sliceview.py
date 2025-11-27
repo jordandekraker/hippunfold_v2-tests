@@ -301,7 +301,7 @@ def find_nifti_for_sub(sub_dir: Path):
     candidates = []
     for sp in ("cropT1w", "cropT2w"):
         for mod in ("T1w", "T2w"):
-            candidates += glob.glob(str(anat / f"*_hemi-*_space-{sp}_desc-preproc_{mod}.nii.gz"))
+            candidates += glob.glob(str(anat / f"{sub_dir.name}_hemi-*_space-{sp}_desc-preproc_{mod}.nii.gz"))
     if not candidates:
         raise FileNotFoundError(f"No preproc NIfTI found under {anat}")
     nii = Path(sorted(candidates)[0])
@@ -312,10 +312,10 @@ def expected_surface_paths(sub_dir: Path, hemi: str, den: str, space_token: str)
     """Return paths for hipp midthickness, inner, outer, and dentate."""  
     surf = sub_dir / "surf"
     sub = sub_dir.name
-    hipp_mid = glob.glob(str(surf / f"*_hemi-{hemi}_space-{space_token}_den-{den}_label-hipp_midthickness.surf.gii"))[0]
-    hipp_in  = glob.glob(str(surf / f"*_hemi-{hemi}_space-{space_token}_den-{den}_label-hipp_inner.surf.gii"))[0]
-    hipp_out = glob.glob(str(surf / f"*_hemi-{hemi}_space-{space_token}_den-{den}_label-hipp_outer.surf.gii"))[0]
-    dent     = glob.glob(str(surf / f"*_hemi-{hemi}_space-{space_token}_den-{den}_label-dentate_midthickness.surf.gii"))[0]
+    hipp_mid = surf / f"{sub}_hemi-{hemi}_space-{space_token}_den-{den}_label-hipp_midthickness.surf.gii"
+    hipp_in  = surf / f"{sub}_hemi-{hemi}_space-{space_token}_den-{den}_label-hipp_inner.surf.gii"
+    hipp_out = surf / f"{sub}_hemi-{hemi}_space-{space_token}_den-{den}_label-hipp_outer.surf.gii"
+    dent     = surf / f"{sub}_hemi-{hemi}_space-{space_token}_den-{den}_label-dentate_midthickness.surf.gii"
     return hipp_mid, hipp_in, hipp_out, dent 
 
 def get_cond_dir(root: Path, cond: str) -> Path:
@@ -433,22 +433,22 @@ SLICE_SIZE = (512, 512)
 SETUPS = [
     {
         "root": Path("test-hippunfold_v2.0.0"),
-        "out": Path("figs_v2.0.0"),
+        "out": Path("figs_2.0.0"),
         "den": "8k",
         "conditions": ["synthlayer"],
     },
-    {
-        "root": Path("test-hippunfold_v2.0.0"),
-        "out": Path("figs_v2.0.0"),
-        "den": "8k",
-        "conditions": ["highresMRI", "lowresMRI", "thickSlice", "atrophy", "neonate", "mouse", "marmoset"],
-    },
-    {
-        "root": Path("test-hippunfold_v1.5.1"),
-        "out": Path("figs_v1.5.1"),
-        "den": "0p5mm",
-        "conditions": ["highresMRI", "lowresMRI", "thickSlice"],
-    },
+    # {
+    #     "root": Path("test-hippunfold_v2.0.0"),
+    #     "out": Path("figs_2.0.0"),
+    #     "den": "8k",
+    #     "conditions": ["highresMRI", "lowresMRI", "thickSlice", "atrophy", "neonate", "mouse", "marmoset"],
+    # },
+    # {
+    #     "root": Path("test-hippunfold_v1.5.1"),
+    #     "out": Path("figs_v1.5.1"),
+    #     "den": "0p5mm",
+    #     "conditions": ["highresMRI", "lowresMRI", "thickSlice"],
+    # },
 ]
 
 
@@ -463,16 +463,12 @@ for setup in SETUPS:
 
     for cond in conditions:
         cond_dir = get_cond_dir(root, cond)
-        ses = ''
-        if cond == "synthlayer":
-            cond_dir = root
-            ses = 'ses-a1'
         subs = sorted(glob.glob(str(cond_dir / "sub-*")))
         if not subs:
             warnings.warn(f"[{cond}] no subjects under {cond_dir}")
             continue
 
-        sub_dir = Path(subs[3] + f"/{ses}") if ses else Path(subs[0])
+        sub_dir = Path(subs[0])
         try:
             nii, space_token = find_nifti_for_sub(sub_dir)
             (

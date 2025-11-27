@@ -12,7 +12,7 @@ import argparse
 # Config
 # ---------------------------
 DATASETS   = ["PNI", "MICs", "bMICs"]
-CONDITIONS = ["T1w", "synthseg_v0.2"]
+CONDITIONS = ["T1w", "synthlayer_v0.3"]
 JITTER_STD = 0.035
 MEAN_S     = 140
 DPI        = 160

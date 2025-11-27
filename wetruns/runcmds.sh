@@ -11,6 +11,9 @@ $RUN ../../../hippunfold-wetrun/neonate $TESTCASE/neonate participant --modality
 $RUN ../../../hippunfold-wetrun/atrophy $TESTCASE/atrophy participant --modality T1w --force_nnunet_model ADNI_T1w_v1 $RUNOPTS
 $RUN ../../../hippunfold-wetrun/mouse $TESTCASE/mouse participant --modality T1w  --use_template_seg --template ABAv3 --no-unfolded-reg --crop_res 0.02x0.02x0.02mm $RUNOPTS
 $RUN ../../../hippunfold-wetrun/marmoset $TESTCASE/marmoset participant --modality T1w  --use_template_seg --template MBMv3 --no-unfolded-reg --crop_res 0.1x0.1x0.1mm $RUNOPTS
+# checklut synthlayer branch
+$RUN ../../../hippunfold-wetrun/highresMRI $TESTCASE/synthlayer participant --modality T1w --force_nnunet_model synthlayer_v0.3 --inject_template layers $RUNOPTS
+
 
 ### now let's run only things that were availabel in v1.0
 

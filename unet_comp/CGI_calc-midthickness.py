@@ -14,7 +14,7 @@ from typing import Optional, Tuple, List
 # Config (edit if needed)
 # ---------------------------
 DATASETS   = ["PNI", "MICs", "bMICs"]
-CONDITIONS = ["T1w", "synthseg_v0.2"]
+CONDITIONS = ["T1w", "synthlayer_v0.3"]
 HEMIS      = ["L", "R"]
 FEATURES   = ["midthickness"]
 
