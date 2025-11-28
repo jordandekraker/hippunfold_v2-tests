@@ -35,8 +35,8 @@ HEMI_MARK = {"L": "o", "R": "x"}
 RNG = np.random.default_rng(42)
 
 # Filtering
-CONSISTENCY_THRESHOLD = 0.8  # exclude subject/hemi/version if mean consistency < threshold
-IDENTIFIABILITY_THRESHOLD = 0.5  
+CONSISTENCY_THRESHOLD = 0.9  # exclude subject/hemi/version if min consistency < threshold
+IDENTIFIABILITY_THRESHOLD = 0.3 
 
 # ========================
 # Logging

@@ -122,7 +122,6 @@ synthlayer,L,HC065,ses-01_ses-02,consistency,0.9646833451647353
 synthlayer,L,HC068,ses-01_ses-02,consistency,0.9579554294899383
 synthlayer,L,HC069,ses-01_ses-02,consistency,0.9866293925576046
 synthlayer,L,HC072,ses-01_ses-02,consistency,0.9962904201579098
-synthlayer,L,HC076,ses-01_ses-02,consistency,0.9949239484166885
 synthlayer,L,HC077,ses-01_ses-02,consistency,0.9949544484898277
 synthlayer,L,HC079,ses-01_ses-02,consistency,0.9971120163947931
 synthlayer,L,HC080,ses-01_ses-02,consistency,0.993763984798483
@@ -138,7 +137,6 @@ synthlayer,L,HC118,ses-01_ses-02,consistency,0.9911527808837802
 synthlayer,L,HC120,ses-01_ses-02,consistency,0.9943574508901383
 synthlayer,L,HC126,ses-01_ses-02,consistency,0.9917911794549784
 synthlayer,L,HC130,ses-01_ses-02,consistency,0.9847255869132278
-synthlayer,L,HC131,ses-01_ses-02,consistency,0.8305443060512943
 synthlayer,L,HC136,ses-01_ses-02,consistency,0.9959839148516729
 synthlayer,R,HC001,ses-01_ses-02,consistency,0.990525228335358
 synthlayer,R,HC005,ses-01_ses-02,consistency,0.9972209315830665
@@ -146,7 +144,6 @@ synthlayer,R,HC009,ses-01_ses-02,consistency,0.9955163450789682
 synthlayer,R,HC010,ses-01_ses-02,consistency,0.997239989885692
 synthlayer,R,HC012,ses-01_ses-02,consistency,0.9970617201842106
 synthlayer,R,HC016,ses-01_ses-02,consistency,0.9965782249314129
-synthlayer,R,HC017,ses-01_ses-02,consistency,0.9907633975386829
 synthlayer,R,HC025,ses-01_ses-02,consistency,0.9951360868615206
 synthlayer,R,HC027,ses-01_ses-02,consistency,0.9879735268480442
 synthlayer,R,HC029,ses-01_ses-02,consistency,0.977068959638042
@@ -163,7 +160,6 @@ synthlayer,R,HC067,ses-01_ses-02,consistency,0.9974070169827103
 synthlayer,R,HC068,ses-01_ses-02,consistency,0.9941121683205987
 synthlayer,R,HC069,ses-01_ses-02,consistency,0.9928980703269855
 synthlayer,R,HC072,ses-01_ses-02,consistency,0.9877376411064326
-synthlayer,R,HC076,ses-01_ses-02,consistency,0.9948423523132349
 synthlayer,R,HC077,ses-01_ses-02,consistency,0.964456824502033
 synthlayer,R,HC079,ses-01_ses-02,consistency,0.9961472470867654
 synthlayer,R,HC081,ses-01_ses-02,consistency,0.9774946151506875
@@ -177,7 +173,6 @@ synthlayer,R,HC093,ses-01_ses-02,consistency,0.9853666202963959
 synthlayer,R,HC108,ses-01_ses-02,consistency,0.9954675394456333
 synthlayer,R,HC117,ses-01_ses-02,consistency,0.9916112847190509
 synthlayer,R,HC118,ses-01_ses-02,consistency,0.9975514818657848
-synthlayer,R,HC126,ses-01_ses-02,consistency,0.9339622466602807
 synthlayer,R,HC136,ses-01_ses-02,consistency,0.9940857742497308
 default,L,HC001,ses-01_ses-02,identifiability,0.019067033663495866
 default,L,HC005,ses-01_ses-02,identifiability,0.01755754174107821
@@ -302,7 +297,6 @@ synthlayer,L,HC065,ses-01_ses-02,identifiability,0.1478238702875704
 synthlayer,L,HC068,ses-01_ses-02,identifiability,0.14057319065654325
 synthlayer,L,HC069,ses-01_ses-02,identifiability,0.16700084270664098
 synthlayer,L,HC072,ses-01_ses-02,identifiability,0.1608977872757757
-synthlayer,L,HC076,ses-01_ses-02,identifiability,0.43665613830285266
 synthlayer,L,HC077,ses-01_ses-02,identifiability,0.15991596661893326
 synthlayer,L,HC079,ses-01_ses-02,identifiability,0.18046027913191126
 synthlayer,L,HC080,ses-01_ses-02,identifiability,0.16228261544122893
@@ -318,7 +312,6 @@ synthlayer,L,HC118,ses-01_ses-02,identifiability,0.15681179064947437
 synthlayer,L,HC120,ses-01_ses-02,identifiability,0.16959312831578136
 synthlayer,L,HC126,ses-01_ses-02,identifiability,0.16023399883095604
 synthlayer,L,HC130,ses-01_ses-02,identifiability,0.16709320774204572
-synthlayer,L,HC131,ses-01_ses-02,identifiability,0.015931406237697437
 synthlayer,L,HC136,ses-01_ses-02,identifiability,0.1629005889411434
 synthlayer,R,HC001,ses-01_ses-02,identifiability,0.17092930406938642
 synthlayer,R,HC005,ses-01_ses-02,identifiability,0.16430627490290894
@@ -326,7 +319,6 @@ synthlayer,R,HC009,ses-01_ses-02,identifiability,0.16587735382352728
 synthlayer,R,HC010,ses-01_ses-02,identifiability,0.164232793472782
 synthlayer,R,HC012,ses-01_ses-02,identifiability,0.17176046011567192
 synthlayer,R,HC016,ses-01_ses-02,identifiability,0.16417567335052105
-synthlayer,R,HC017,ses-01_ses-02,identifiability,0.4244641610309099
 synthlayer,R,HC025,ses-01_ses-02,identifiability,0.1647008474769097
 synthlayer,R,HC027,ses-01_ses-02,identifiability,0.17291873270590064
 synthlayer,R,HC029,ses-01_ses-02,identifiability,0.15000489162245495
@@ -343,7 +335,6 @@ synthlayer,R,HC067,ses-01_ses-02,identifiability,0.1809980334848616
 synthlayer,R,HC068,ses-01_ses-02,identifiability,0.16151949502810167
 synthlayer,R,HC069,ses-01_ses-02,identifiability,0.1888366716747542
 synthlayer,R,HC072,ses-01_ses-02,identifiability,0.1585839174680708
-synthlayer,R,HC076,ses-01_ses-02,identifiability,0.4332939254752852
 synthlayer,R,HC077,ses-01_ses-02,identifiability,0.1503934809111548
 synthlayer,R,HC079,ses-01_ses-02,identifiability,0.1911921967899129
 synthlayer,R,HC081,ses-01_ses-02,identifiability,0.16298772432617678
@@ -357,7 +348,6 @@ synthlayer,R,HC093,ses-01_ses-02,identifiability,0.16715283946075507
 synthlayer,R,HC108,ses-01_ses-02,identifiability,0.16593610797806685
 synthlayer,R,HC117,ses-01_ses-02,identifiability,0.16570359917040214
 synthlayer,R,HC118,ses-01_ses-02,identifiability,0.1644186984618486
-synthlayer,R,HC126,ses-01_ses-02,identifiability,0.37068053179997934
 synthlayer,R,HC136,ses-01_ses-02,identifiability,0.16703085390720798
 default,L,HC001,ses-01,cell_quality,0.6030256574936045
 default,L,HC001,ses-02,cell_quality,0.6088842739198739
@@ -605,8 +595,6 @@ synthlayer,L,HC069,ses-01,cell_quality,0.592910697000554
 synthlayer,L,HC069,ses-02,cell_quality,0.6088371085638036
 synthlayer,L,HC072,ses-01,cell_quality,0.6321846856498168
 synthlayer,L,HC072,ses-02,cell_quality,0.5937262192819711
-synthlayer,L,HC076,ses-01,cell_quality,0.5830765296655005
-synthlayer,L,HC076,ses-02,cell_quality,0.5909562662412218
 synthlayer,L,HC077,ses-01,cell_quality,0.6077919326268709
 synthlayer,L,HC077,ses-02,cell_quality,0.5922616985220293
 synthlayer,L,HC079,ses-01,cell_quality,0.6090302272051665
@@ -637,8 +625,6 @@ synthlayer,L,HC126,ses-01,cell_quality,0.6329794803179314
 synthlayer,L,HC126,ses-02,cell_quality,0.6038587182459468
 synthlayer,L,HC130,ses-01,cell_quality,0.599505851063935
 synthlayer,L,HC130,ses-02,cell_quality,0.5745159686832133
-synthlayer,L,HC131,ses-01,cell_quality,0.44050079108881873
-synthlayer,L,HC131,ses-02,cell_quality,0.6040020612642707
 synthlayer,L,HC136,ses-01,cell_quality,0.6096163625269081
 synthlayer,L,HC136,ses-02,cell_quality,0.6232861453433902
 synthlayer,R,HC001,ses-01,cell_quality,0.610220496977955
@@ -653,8 +639,6 @@ synthlayer,R,HC012,ses-01,cell_quality,0.6096632643712245
 synthlayer,R,HC012,ses-02,cell_quality,0.6121297779992644
 synthlayer,R,HC016,ses-01,cell_quality,0.6326215642737456
 synthlayer,R,HC016,ses-02,cell_quality,0.6147252094162673
-synthlayer,R,HC017,ses-01,cell_quality,0.5849106780732302
-synthlayer,R,HC017,ses-02,cell_quality,0.5736238147581025
 synthlayer,R,HC025,ses-01,cell_quality,0.6065884590770498
 synthlayer,R,HC025,ses-02,cell_quality,0.6162277121674987
 synthlayer,R,HC027,ses-01,cell_quality,0.6011223907652705
@@ -687,8 +671,6 @@ synthlayer,R,HC069,ses-01,cell_quality,0.5802655648508706
 synthlayer,R,HC069,ses-02,cell_quality,0.5842663885466748
 synthlayer,R,HC072,ses-01,cell_quality,0.6157193435343259
 synthlayer,R,HC072,ses-02,cell_quality,0.6174533206416394
-synthlayer,R,HC076,ses-01,cell_quality,0.5836354969023432
-synthlayer,R,HC076,ses-02,cell_quality,0.5751706381835353
 synthlayer,R,HC077,ses-01,cell_quality,0.5555759227966579
 synthlayer,R,HC077,ses-02,cell_quality,0.5962336465214375
 synthlayer,R,HC079,ses-01,cell_quality,0.6202571043715379
@@ -715,7 +697,5 @@ synthlayer,R,HC117,ses-01,cell_quality,0.6077675337711796
 synthlayer,R,HC117,ses-02,cell_quality,0.6013386565156539
 synthlayer,R,HC118,ses-01,cell_quality,0.6138781493465394
 synthlayer,R,HC118,ses-02,cell_quality,0.6264486696300683
-synthlayer,R,HC126,ses-01,cell_quality,0.460080085308049
-synthlayer,R,HC126,ses-02,cell_quality,0.5450300154921837
 synthlayer,R,HC136,ses-01,cell_quality,0.626457430718316
 synthlayer,R,HC136,ses-02,cell_quality,0.6053739412985552
