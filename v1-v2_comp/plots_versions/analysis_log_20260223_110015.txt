@@ -1,5 +1,5 @@
-Analysis started at 2025-11-26 10:47:58
-Log file: plots_versions/analysis_log_20251126_104758.txt
+Analysis started at 2026-02-23 11:00:15
+Log file: plots_versions/analysis_log_20260223_110015.txt
 ============================================================
 
 ============================================================
@@ -19,27 +19,27 @@ Subjects total: 50 | complete for RM: 50
 Version levels: ['v1.5.1', 'v2.0.0']
 Hemisphere levels: ['L', 'R']
                 F Value  Num DF  Den DF        Pr > F
-version       54.696453     1.0    49.0  1.621008e-09
-hemi           0.321689     1.0    49.0  5.731838e-01
-version:hemi   0.047257     1.0    49.0  8.288102e-01
+version       54.304059     1.0    49.0  1.781616e-09
+hemi           0.314026     1.0    49.0  5.777736e-01
+version:hemi   0.044273     1.0    49.0  8.342199e-01
 
 Repeated-measures ANOVA for identifiability (within: version, hemi)
 Subjects total: 50 | complete for RM: 50
 Version levels: ['v1.5.1', 'v2.0.0']
 Hemisphere levels: ['L', 'R']
                 F Value  Num DF  Den DF        Pr > F
-version       39.480295     1.0    49.0  8.548869e-08
-hemi           4.275323     1.0    49.0  4.397101e-02
-version:hemi   0.275202     1.0    49.0  6.022290e-01
+version       39.016734     1.0    49.0  9.752412e-08
+hemi           4.294627     1.0    49.0  4.351586e-02
+version:hemi   0.285640     1.0    49.0  5.954450e-01
 
 Repeated-measures ANOVA for cell_quality (within: version, hemi)
 Subjects total: 50 | complete for RM: 50
 Version levels: ['v1.5.1', 'v2.0.0']
 Hemisphere levels: ['L', 'R']
                  F Value  Num DF  Den DF        Pr > F
-version       214.913937     1.0    49.0  1.518032e-19
-hemi            0.531133     1.0    49.0  4.696002e-01
-version:hemi    0.943036     1.0    49.0  3.362677e-01
+version       215.271265     1.0    49.0  1.468320e-19
+hemi            0.609050     1.0    49.0  4.388995e-01
+version:hemi    1.034790     1.0    49.0  3.140328e-01
 
 ============================================================
 Processing dataset: BIDS_PNI
@@ -58,29 +58,29 @@ Subjects total: 10 | complete for RM: 10
 Version levels: ['v1.5.1', 'v2.0.0']
 Hemisphere levels: ['L', 'R']
                F Value  Num DF  Den DF    Pr > F
-version       0.284973     1.0     9.0  0.606391
-hemi          0.073484     1.0     9.0  0.792444
-version:hemi  0.617388     1.0     9.0  0.452209
+version       0.692709     1.0     9.0  0.426777
+hemi          0.346954     1.0     9.0  0.570329
+version:hemi  0.065611     1.0     9.0  0.803597
 
 Repeated-measures ANOVA for identifiability (within: version, hemi)
 Subjects total: 10 | complete for RM: 10
 Version levels: ['v1.5.1', 'v2.0.0']
 Hemisphere levels: ['L', 'R']
-                 F Value  Num DF  Den DF    Pr > F
-version       127.220719     1.0     9.0  0.000001
-hemi            5.247636     1.0     9.0  0.047714
-version:hemi    3.443733     1.0     9.0  0.096467
+                F Value  Num DF  Den DF    Pr > F
+version       95.775835     1.0     9.0  0.000004
+hemi           4.979274     1.0     9.0  0.052574
+version:hemi   0.842922     1.0     9.0  0.382508
 
 Repeated-measures ANOVA for cell_quality (within: version, hemi)
 Subjects total: 10 | complete for RM: 10
 Version levels: ['v1.5.1', 'v2.0.0']
 Hemisphere levels: ['L', 'R']
                 F Value  Num DF  Den DF    Pr > F
-version       79.630438     1.0     9.0  0.000009
-hemi           0.432045     1.0     9.0  0.527437
-version:hemi   2.666791     1.0     9.0  0.136896
+version       83.242731     1.0     9.0  0.000008
+hemi           0.463823     1.0     9.0  0.512982
+version:hemi   1.900240     1.0     9.0  0.201347
 
 ============================================================
 All datasets processed successfully!
 ============================================================
-Analysis completed at 2025-11-26 10:50:46
+Analysis completed at 2026-02-23 11:01:30

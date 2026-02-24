@@ -262,47 +262,91 @@ def collect_overall_means(version_dirs, ds, hemi, session_pairs):
 
 
 def scatter_block(df_sub, value_col, labels, group_cols, title, out_png):
-    """Create scatter plot with means and error bars."""
+    """Create scatter plot with grey jittered individuals + colored mean±SD."""
+    import numpy as np
+    import matplotlib.pyplot as plt
+    from matplotlib.lines import Line2D
+
     plt.figure(figsize=(3, 4))
     xs = np.arange(len(labels))
-    
+
+    # group colors (nice defaults; will cycle if more than 2 labels)
+    palette = [
+        "#1f77b4",  # blue
+        "#ff7f0e",  # orange
+        "#2ca02c",  # green
+        "#d62728",  # red
+        "#9467bd",  # purple
+        "#8c564b",  # brown
+    ]
+    label_to_color = {lab: palette[i % len(palette)] for i, lab in enumerate(labels)}
+
     for x, lab in zip(xs, labels):
         mask = np.ones(len(df_sub), dtype=bool)
         for col, val in zip(group_cols, lab):
             mask &= (df_sub[col] == val)
-        
+
         cur = df_sub.loc[mask, ["subject_id", "hemi", value_col]].dropna(subset=[value_col])
         if len(cur) == 0:
             continue
-        
+
         vals = cur[value_col].astype(float).to_numpy()
-        subs = cur["subject_id"].astype(str).to_numpy()
         hemis = cur["hemi"].astype(str).tolist()
         jit = RNG.normal(loc=x, scale=JITTER_STD, size=len(vals))
-        
-        # Plot individual points
+
+        # ---- individuals: grey + slightly opaque
         for j in range(len(vals)):
             marker = HEMI_MARK.get(hemis[j], "o")
-            color = color_lookup.get(subs[j], "gray")
             if marker == "o":
-                plt.scatter(jit[j], vals[j], s=30, alpha=0.85, color=color, marker=marker, linewidths=0)
+                plt.scatter(
+                    jit[j], vals[j],
+                    s=30,
+                    alpha=0.35,
+                    color="#7f7f7f",
+                    marker=marker,
+                    linewidths=0,
+                    zorder=1,
+                )
             else:
-                plt.scatter(jit[j], vals[j], s=30, alpha=0.85, color=color, marker=marker)
-        
-        # Plot mean and error bar
+                plt.scatter(
+                    jit[j], vals[j],
+                    s=30,
+                    alpha=0.35,
+                    color="#7f7f7f",
+                    marker=marker,
+                    zorder=1,
+                )
+
+        # ---- mean ± SD (colored mean dot, thick error bars, on top)
         mu = float(np.nanmean(vals))
         sd = float(np.nanstd(vals, ddof=1)) if len(vals) > 1 else 0.0
-        plt.scatter([x], [mu], s=MEAN_S, color="black", zorder=5)
-        plt.errorbar([x], [mu], yerr=[[sd], [sd]], fmt="none",
-                    ecolor="black", elinewidth=2, capsize=6, capthick=2)
-    
-    # Legend
-    from matplotlib.lines import Line2D
+        c = label_to_color[lab]
+
+        plt.errorbar(
+            x=[x], y=[mu],
+            yerr=[[sd], [sd]],
+            fmt="o",
+            markersize=10,               # large mean dot
+            markerfacecolor=c,
+            markeredgecolor="black",
+            markeredgewidth=0.9,
+            ecolor=c,
+            elinewidth=2.8,              # thick -> visible
+            capsize=5,
+            capthick=2.8,
+            linestyle="none",
+            zorder=5,                    # above individuals
+        )
+
+    # Legend: hemisphere markers (individuals)
     legend_elems = [
-        Line2D([0], [0], marker='o', color='w', label='Left (L)', markerfacecolor='black', markersize=7),
-        Line2D([0], [0], marker='x', color='black', label='Right (R)', markersize=7, linestyle='None')
+        Line2D([0], [0], marker='o', color='w', label='Left (L)',
+               markerfacecolor='#7f7f7f', alpha=0.35, markersize=7, linestyle='None'),
+        Line2D([0], [0], marker='x', color='#7f7f7f', label='Right (R)',
+               alpha=0.35, markersize=7, linestyle='None'),
     ]
     plt.legend(handles=legend_elems, title="Hemisphere", loc="best", frameon=True)
+
     plt.xticks(xs, ["/".join(map(str, lab)) for lab in labels])
     plt.grid(alpha=0.2, axis="y")
     plt.title(title, fontsize=10)
