@@ -8,6 +8,8 @@ import matplotlib.pyplot as plt
 from pathlib import Path
 import argparse
 
+from scipy.stats import ttest_rel  # <-- NEW (paired t-test)
+
 # ---------------------------
 # Config
 # ---------------------------
@@ -18,6 +20,21 @@ MEAN_S     = 140
 DPI        = 160
 OUTDIR     = "plots/"
 HEMI_MARK  = {"L": "o", "R": "x"}  # hemisphere -> marker
+
+# Use ONLY the 3rd, 4th, 5th colors from the old palette
+# old palette = [blue, orange, green, red, purple, brown]
+PALETTE_MEANS = [
+    "#2ca02c",  # green  (3rd)
+    "#d62728",  # red    (4th)
+    "#9467bd",  # purple (5th)
+]
+
+# T-test comparisons (within each dataset + measure plot):
+# synthseg_v0.2 vs T1w, synthlayer_v0.3 vs T1w
+TTEST_COMPARISONS = [
+    ("T1w", "synthseg_v0.2"),
+    ("T1w", "synthlayer_v0.3"),
+]
 
 # ---------------------------
 # CLI
@@ -42,6 +59,7 @@ if "subject_row" in df.columns:
 
 # ---------------------------
 # Consistent colors for subject_row across all plots
+# (kept, though individuals are currently plotted as grey)
 # ---------------------------
 all_subject_rows = np.unique(df["subject_row"].values)
 all_subject_rows = all_subject_rows[~pd.isna(all_subject_rows)]
@@ -51,32 +69,88 @@ cmap = plt.get_cmap(args.palette, max(len(all_subject_rows), 1))
 color_lookup = {sr: cmap(i % cmap.N) for i, sr in enumerate(sorted(all_subject_rows))}
 
 # ---------------------------
+# Helpers: significance stars + bracket annotation
+# ---------------------------
+def p_to_stars(p: float) -> str | None:
+    if not np.isfinite(p):
+        return None
+    if p < 0.001:
+        return "***"
+    if p < 0.01:
+        return "**"
+    if p < 0.05:
+        return "*"
+    return None
+
+def add_sig_bracket(ax, x1, x2, y, text, h=0.02):
+    """Draw a bracket from x1->x2 at height y (data coords), and put text centered above."""
+    ax.plot([x1, x1, x2, x2], [y, y + h, y + h, y], lw=1.4, color="black", clip_on=False)
+    ax.text((x1 + x2) / 2, y + h, text, ha="center", va="bottom", fontsize=12, color="black")
+
+def paired_ttest_by_subject_mean(df_in: pd.DataFrame, value_col: str, cond_a: str, cond_b: str) -> float:
+    """
+    Paired t-test comparing cond_a vs cond_b using per-subject means across hemispheres.
+    Pairs are matched on subject_row. Subjects must have both conditions.
+    Returns p-value (nan if insufficient pairs).
+    """
+    if df_in.empty:
+        return float("nan")
+
+    needed = {"subject_row", "condition", "hemi", value_col}
+    if not needed.issubset(df_in.columns):
+        return float("nan")
+
+    dfa = df_in[df_in["condition"] == cond_a].copy()
+    dfb = df_in[df_in["condition"] == cond_b].copy()
+    if dfa.empty or dfb.empty:
+        return float("nan")
+
+    # mean across hemispheres within each subject
+    ma = dfa.groupby("subject_row")[value_col].mean()
+    mb = dfb.groupby("subject_row")[value_col].mean()
+
+    common = ma.index.intersection(mb.index)
+    if len(common) < 2:
+        return float("nan")
+
+    a = ma.loc[common].to_numpy(dtype=float)
+    b = mb.loc[common].to_numpy(dtype=float)
+
+    # paired t-test (two-sided)
+    res = ttest_rel(a, b, nan_policy="omit")
+    return float(res.pvalue)
+
+# ---------------------------
 # Jittered scatter helper
 # - groups defined by labels & group_cols
-# - points colored by subject_row and shaped by hemisphere
-# - group mean/SD across BOTH hemispheres (hemi not in group_cols)
+# - individuals: grey, shaped by hemisphere
+# - mean/SD: colored by label index (using PALETTE_MEANS, cycling if needed)
+# - optional paired t-test annotations for condition-only plots
 # ---------------------------
-def scatter_block(df_sub, value_col, labels, group_cols, title, out_png):
+def scatter_block(
+    df_sub,
+    value_col,
+    labels,
+    group_cols,
+    title,
+    out_png,
+    annotate_ttests=False,
+    ttest_pairs=None,
+):
     import numpy as np
     import matplotlib.pyplot as plt
     from matplotlib.lines import Line2D
 
-    plt.figure(figsize=(8, 4))
+    fig, ax = plt.subplots(figsize=(4, 4))
     xs = np.arange(len(labels))
 
-    # nice palette; cycles if needed
-    palette = [
-        "#1f77b4",  # blue
-        "#ff7f0e",  # orange
-        "#2ca02c",  # green
-        "#d62728",  # red
-        "#9467bd",  # purple
-        "#8c564b",  # brown
-    ]
-    label_to_color = {lab: palette[i % len(palette)] for i, lab in enumerate(labels)}
-
-    # reproducible jitter (optional). If you want non-deterministic jitter, remove this RNG and use np.random.normal.
+    label_to_color = {lab: PALETTE_MEANS[i % len(PALETTE_MEANS)] for i, lab in enumerate(labels)}
     rng = np.random.default_rng(0)
+
+    # Track group summaries for annotation placement
+    group_mus = {}
+    group_sds = {}
+    group_max = {}
 
     for x, lab in zip(xs, labels):
         # filter rows for this group
@@ -96,7 +170,7 @@ def scatter_block(df_sub, value_col, labels, group_cols, title, out_png):
         for j in range(len(vals)):
             marker = HEMI_MARK.get(hemis[j], "o")
             if marker == "o":
-                plt.scatter(
+                ax.scatter(
                     jit[j], vals[j],
                     s=30,
                     alpha=0.35,
@@ -106,7 +180,7 @@ def scatter_block(df_sub, value_col, labels, group_cols, title, out_png):
                     zorder=1,
                 )
             else:  # 'x' (Right)
-                plt.scatter(
+                ax.scatter(
                     jit[j], vals[j],
                     s=30,
                     alpha=0.35,
@@ -120,83 +194,137 @@ def scatter_block(df_sub, value_col, labels, group_cols, title, out_png):
         sd = float(np.nanstd(vals, ddof=1)) if len(vals) > 1 else 0.0
         c = label_to_color[lab]
 
-        plt.errorbar(
+        ax.errorbar(
             x=[x], y=[mu],
             yerr=[[sd], [sd]],
             fmt="o",
-            markersize=10,          # large mean dot
+            markersize=10,
             markerfacecolor=c,
             markeredgecolor="black",
             markeredgewidth=0.9,
             ecolor=c,
-            elinewidth=2.8,         # thick -> visible
+            elinewidth=2.8,
             capsize=5,
             capthick=2.8,
             linestyle="none",
             zorder=5,
         )
 
-    # axis/legend
-    plt.xticks(xs, ["/".join(map(str, lab)) for lab in labels], rotation=0)
-    plt.grid(alpha=0.2, axis="y")
-    plt.title(title, fontsize=10)
+        group_mus[lab] = mu
+        group_sds[lab] = sd
+        group_max[lab] = float(np.nanmax(vals))
 
-    # hemisphere marker legend (for individuals)
+    # axis/legend
+    ax.set_xticks(xs)
+    ax.set_xticklabels(["/".join(map(str, lab)) for lab in labels], rotation=0)
+    ax.grid(alpha=0.2, axis="y")
+    ax.set_title(title, fontsize=10)
+
     legend_elems = [
         Line2D([0],[0], marker='o', color='w', label='Left (L)',
                markerfacecolor='#7f7f7f', alpha=0.35, markersize=7, linestyle='None'),
         Line2D([0],[0], marker='x', color='#7f7f7f', label='Right (R)',
                alpha=0.35, markersize=7, linestyle='None'),
     ]
-    plt.legend(handles=legend_elems, title="Hemisphere", loc="best", frameon=True)
+    ax.legend(handles=legend_elems, title="Hemisphere", loc="best", frameon=True)
 
-    plt.tight_layout()
-    plt.savefig(out_png, dpi=DPI)
-    plt.close()
+    # ---- Optional: paired t-test annotations (only sensible when x-axis is CONDITIONS)
+    if annotate_ttests and ttest_pairs:
+        # map condition name -> x position
+        cond_to_x = {}
+        for x, lab in zip(xs, labels):
+            # labels are like (cond,) for these plots
+            if len(lab) == 1:
+                cond_to_x[str(lab[0])] = x
+
+        y_span = ax.get_ylim()[1] - ax.get_ylim()[0]
+        base_y = max(group_mus.get(lab, -np.inf) + group_sds.get(lab, 0.0) for lab in labels) if labels else ax.get_ylim()[1]
+        if not np.isfinite(base_y):
+            base_y = ax.get_ylim()[1]
+
+        step = 0.06 * y_span  # spacing between stacked brackets
+        h = 0.015 * y_span
+
+        used = 0
+        for (a, b) in ttest_pairs:
+            if a not in cond_to_x or b not in cond_to_x:
+                continue
+
+            p = paired_ttest_by_subject_mean(df_sub, value_col=value_col, cond_a=a, cond_b=b)
+            stars = p_to_stars(p)
+            if stars is None:
+                continue
+
+            x1, x2 = cond_to_x[a], cond_to_x[b]
+            if x2 < x1:
+                x1, x2 = x2, x1
+
+            y = base_y + (used + 1) * step
+            add_sig_bracket(ax, x1, x2, y, stars, h=h)
+            used += 1
+
+        # ensure room for annotations
+        if used > 0:
+            ax.set_ylim(ax.get_ylim()[0], base_y + (used + 2) * step)
+
+    fig.tight_layout()
+    fig.savefig(out_png, dpi=DPI)
+    plt.close(fig)
 
 # ---------------------------
-# 1) Consistency: groups = (condition, dataset)
+# 1) Consistency: separate plots for MICs and PNI
+#    groups = (condition) within each dataset
 # ---------------------------
 df_cons = df[df["measure"] == "consistency"].copy()
 if not df_cons.empty:
-    labels_c = [(cond, ds) for cond in CONDITIONS for ds in DATASETS]
-    scatter_block(
-        df_sub=df_cons.rename(columns={"value": "metric"}),
-        value_col="metric",
-        labels=labels_c,
-        group_cols=["condition", "dataset"],
-        title="Consistency (within-subject, across sessions)",
-        out_png=os.path.join(OUTDIR, "CGI-consistency_scatter.png"),
-    )
+    for ds in DATASETS:
+        df_ds = df_cons[df_cons["dataset"] == ds].copy()
+        labels_c = [(cond,) for cond in CONDITIONS]
+
+        scatter_block(
+            df_sub=df_ds.rename(columns={"value": "metric"}),
+            value_col="metric",
+            labels=labels_c,
+            group_cols=["condition"],
+            title=f"Consistency (within-subject, across sessions) — {ds}",
+            out_png=os.path.join(OUTDIR, f"CGI-consistency_scatter_{ds}.png"),
+            annotate_ttests=True,
+            ttest_pairs=TTEST_COMPARISONS,
+        )
 
 # ---------------------------
-# 2) Identifiability: groups = (condition, dataset)
+# 2) Identifiability: separate plots for MICs and PNI
+#    groups = (condition) within each dataset
 # ---------------------------
 df_ident = df[df["measure"] == "identifiability"].copy()
 if not df_ident.empty:
-    labels_i = [(cond, ds) for cond in CONDITIONS for ds in DATASETS]
-    scatter_block(
-        df_sub=df_ident.rename(columns={"value": "metric"}),
-        value_col="metric",
-        labels=labels_i,
-        group_cols=["condition", "dataset"],
-        title="Identifiability (between-subject / consistency-normalized)",
-        out_png=os.path.join(OUTDIR, "CGI-identifiability_scatter.png"),
-    )
+    for ds in DATASETS:
+        df_ds = df_ident[df_ident["dataset"] == ds].copy()
+        labels_i = [(cond,) for cond in CONDITIONS]
+
+        scatter_block(
+            df_sub=df_ds.rename(columns={"value": "metric"}),
+            value_col="metric",
+            labels=labels_i,
+            group_cols=["condition"],
+            title=f"Identifiability (between-subject / consistency-normalized) — {ds}",
+            out_png=os.path.join(OUTDIR, f"CGI-identifiability_scatter_{ds}.png"),
+            annotate_ttests=True,
+            ttest_pairs=TTEST_COMPARISONS,
+        )
 
 # ---------------------------
-# 3) Generalizability: groups = (condition, dataset_pair)
+# 3) Generalizability: unchanged structure (no single dataset to split by),
+#    but mean colors now use only the 3rd/4th/5th palette colors (cycled).
 # ---------------------------
 df_gen = df[df["measure"] == "generalizability"].copy()
 if not df_gen.empty:
-    # Ensure the expected column exists (new CSV has dataset_pair)
     if "dataset_pair" not in df_gen.columns:
         raise RuntimeError("metrics_per_subject.csv lacks 'dataset_pair' for generalizability. Re-run the analysis script.")
-    # Fixed order of pairs for x-axis:
+
     PAIRS = ["PNI-MICs", "MICs-bMICs", "bMICs-PNI"]
     labels_g = [(cond, pair) for cond in CONDITIONS for pair in PAIRS]
 
-    # Reuse scatter_block but with group_cols = ["condition","dataset_pair"]
     scatter_block(
         df_sub=df_gen.rename(columns={"value": "metric"}),
         value_col="metric",
@@ -204,6 +332,7 @@ if not df_gen.empty:
         group_cols=["condition", "dataset_pair"],
         title="Generalizability (pairwise correlations per person)",
         out_png=os.path.join(OUTDIR, "CGI-generalizability_scatter.png"),
+        annotate_ttests=False,
     )
 
 print(f"Done. Wrote plots to: {OUTDIR}/")

@@ -33,7 +33,7 @@ SUBJECT_LIST_FILES = {
     "PNI":   "participants-PNI.txt",
 }
 
-MAX_SESSIONS = 5
+MAX_SESSIONS = 3
 RNG_SEED     = 42
 JITTER_STD   = 0.035
 MEAN_S       = 140
