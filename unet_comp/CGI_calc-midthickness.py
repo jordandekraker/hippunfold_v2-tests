@@ -13,8 +13,8 @@ from typing import Optional, Tuple, List
 # ---------------------------
 # Config (edit if needed)
 # ---------------------------
-DATASETS   = ["PNI", "MICs", "bMICs"]
-CONDITIONS = ["T1w", "synthlayer_v0.3"]
+DATASETS   = ["PNI", "MICs"]
+CONDITIONS = ["T1w", "synthseg_v0.2", "synthlayer_v0.3"]
 HEMIS      = ["L", "R"]
 FEATURES   = ["midthickness"]
 
@@ -26,19 +26,21 @@ SUBDIR = "surf"  # geometry lives in *.surf.gii
 MICAPIPE_ROOTS = {
     "PNI":   "/data/mica3/BIDS_PNI/derivatives/micapipe_v0.2.0",
     "MICs":  "/data/mica3/BIDS_MICs/derivatives/micapipe_v0.2.0",
-    "bMICs": "/data/mica3/BIDS_bMICs/derivatives/micapipe_v0.2.0",
 }
 
 SUBJECT_LIST_FILES = {
     "MICs":  "participants-MICs.txt",
     "PNI":   "participants-PNI.txt",
-    "bMICs": "participants-bMICs.txt",
 }
 
 MAX_SESSIONS = 5
 RNG_SEED     = 42
 JITTER_STD   = 0.035
 MEAN_S       = 140
+
+QC_DICE_THRESH = 0.7
+QC_SUBDIR = "qc"
+QC_DESC = "unetf3d"
 
 # ---------------------------
 # Read participant lists (row aligned across datasets)
@@ -159,16 +161,40 @@ def probe_vector_length(datasets: List[str], conditions: List[str], hemis: List[
     print(f"[INFO] probe_vector_length: using fallback F={F_fallback} (no files found during probe)")
     return F_fallback
 
+def passes_qc(base_dir: str, sub: str, ses: str, hemi: str,
+              thresh: float = QC_DICE_THRESH) -> bool:
+    """
+    Return True if QC dice >= threshold.
+    Missing or unreadable QC → treated as FAIL.
+    """
+    qc_path = os.path.join(
+        base_dir,
+        f"sub-{sub}",
+        f"ses-{ses}",
+        QC_SUBDIR,
+        f"sub-{sub}_ses-{ses}_hemi-{hemi}_desc-{QC_DESC}_dice.tsv",
+    )
+
+    if not os.path.exists(qc_path):
+        return False
+
+    try:
+        val = float(open(qc_path).read().strip())
+        return val >= thresh
+    except Exception:
+        return False
+
 # ---------------------------
 # Helper to load & concat one session vector (returns NaN vector when missing)
 # ---------------------------
 def load_concat_vector(base_dir: str, ds: str, sub: str, ses: str, hemi: str, F_target: int) -> np.ndarray:
-    vecs = []
-    # For bMICs, use MICs affines
-    ds_for_affine = "MICs" if ds == "bMICs" else ds
+    # ---- QC FILTER ----
+    if not passes_qc(base_dir, sub, ses, hemi):
+        return np.full((F_target,), np.nan, dtype=np.float64)
 
+    vecs = []
     # Build transform path (micapipe derivatives)
-    xfm_root = MICAPIPE_ROOTS.get(ds_for_affine, "")
+    xfm_root = MICAPIPE_ROOTS.get(ds, "")
     mat_path = os.path.join(
         xfm_root,
         f"sub-{sub}",
@@ -317,9 +343,9 @@ for d_i, ds in enumerate(DATASETS):
 df_ident = pd.DataFrame(rows_ident, columns=["dataset","condition","hemi","subject_row","identifiability"])
 
 # ---------------------------
-# Block 3: Generalizability (pairwise: PNI–MICs, MICs–bMICs, bMICs–PNI)
+# Block 3: Generalizability (pairwise: PNI–MICs)
 # ---------------------------
-PAIR_NAMES = [("PNI","MICs"), ("MICs","bMICs"), ("bMICs","PNI")]
+PAIR_NAMES = [("PNI","MICs")]
 rows_gen = []
 ds_to_idx = {ds:i for i,ds in enumerate(DATASETS)}
 

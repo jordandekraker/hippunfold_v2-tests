@@ -11,8 +11,8 @@ import argparse
 # ---------------------------
 # Config
 # ---------------------------
-DATASETS   = ["PNI", "MICs", "bMICs"]
-CONDITIONS = ["T1w", "synthlayer_v0.3"]
+DATASETS   = ["PNI", "MICs"]
+CONDITIONS = ["T1w", "synthseg_v0.2", "synthlayer_v0.3"]
 JITTER_STD = 0.035
 MEAN_S     = 140
 DPI        = 160
@@ -57,8 +57,26 @@ color_lookup = {sr: cmap(i % cmap.N) for i, sr in enumerate(sorted(all_subject_r
 # - group mean/SD across BOTH hemispheres (hemi not in group_cols)
 # ---------------------------
 def scatter_block(df_sub, value_col, labels, group_cols, title, out_png):
+    import numpy as np
+    import matplotlib.pyplot as plt
+    from matplotlib.lines import Line2D
+
     plt.figure(figsize=(8, 4))
     xs = np.arange(len(labels))
+
+    # nice palette; cycles if needed
+    palette = [
+        "#1f77b4",  # blue
+        "#ff7f0e",  # orange
+        "#2ca02c",  # green
+        "#d62728",  # red
+        "#9467bd",  # purple
+        "#8c564b",  # brown
+    ]
+    label_to_color = {lab: palette[i % len(palette)] for i, lab in enumerate(labels)}
+
+    # reproducible jitter (optional). If you want non-deterministic jitter, remove this RNG and use np.random.normal.
+    rng = np.random.default_rng(0)
 
     for x, lab in zip(xs, labels):
         # filter rows for this group
@@ -67,39 +85,68 @@ def scatter_block(df_sub, value_col, labels, group_cols, title, out_png):
             mask &= (df_sub[col] == val)
         cur = df_sub.loc[mask, ["subject_row", "hemi", value_col]].dropna(subset=[value_col])
 
-        if len(cur) > 0:
-            vals  = cur[value_col].to_numpy(dtype=float)
-            srows = cur["subject_row"].to_numpy(dtype=float)  # may have NaNs; will fall back to gray
-            hemis = cur["hemi"].astype(str).tolist()
-            jit   = np.random.normal(loc=x, scale=JITTER_STD, size=len(vals))
+        if len(cur) == 0:
+            continue
 
-            # draw each point
-            for j in range(len(vals)):
-                hemi = hemis[j]
-                marker = HEMI_MARK.get(hemi, "o")
-                color = color_lookup.get(int(srows[j]) if not np.isnan(srows[j]) else None, "gray")
-                # Use edge/face handling so both 'o' and 'x' look good
-                if marker == "o":
-                    plt.scatter(jit[j], vals[j], s=30, alpha=0.85, color=color, marker=marker, linewidths=0)
-                else:  # 'x' (Right)
-                    plt.scatter(jit[j], vals[j], s=30, alpha=0.85, color=color, marker=marker)
+        vals  = cur[value_col].to_numpy(dtype=float)
+        hemis = cur["hemi"].astype(str).tolist()
+        jit   = rng.normal(loc=x, scale=JITTER_STD, size=len(vals))
 
-            # mean & SD across both hemispheres in the group
-            mu = np.nanmean(vals)
-            sd = np.nanstd(vals, ddof=1) if len(vals) > 1 else 0.0
-            plt.scatter([x], [mu], s=MEAN_S, color="black", zorder=5)
-            plt.errorbar([x], [mu], yerr=[[sd],[sd]], fmt="none",
-                         ecolor="black", elinewidth=2, capsize=6, capthick=2)
+        # ---- individuals: grey, slightly opaque
+        for j in range(len(vals)):
+            marker = HEMI_MARK.get(hemis[j], "o")
+            if marker == "o":
+                plt.scatter(
+                    jit[j], vals[j],
+                    s=30,
+                    alpha=0.35,
+                    color="#7f7f7f",
+                    marker=marker,
+                    linewidths=0,
+                    zorder=1,
+                )
+            else:  # 'x' (Right)
+                plt.scatter(
+                    jit[j], vals[j],
+                    s=30,
+                    alpha=0.35,
+                    color="#7f7f7f",
+                    marker=marker,
+                    zorder=1,
+                )
+
+        # ---- mean ± SD across both hemispheres in the group
+        mu = float(np.nanmean(vals))
+        sd = float(np.nanstd(vals, ddof=1)) if len(vals) > 1 else 0.0
+        c = label_to_color[lab]
+
+        plt.errorbar(
+            x=[x], y=[mu],
+            yerr=[[sd], [sd]],
+            fmt="o",
+            markersize=10,          # large mean dot
+            markerfacecolor=c,
+            markeredgecolor="black",
+            markeredgewidth=0.9,
+            ecolor=c,
+            elinewidth=2.8,         # thick -> visible
+            capsize=5,
+            capthick=2.8,
+            linestyle="none",
+            zorder=5,
+        )
 
     # axis/legend
     plt.xticks(xs, ["/".join(map(str, lab)) for lab in labels], rotation=0)
     plt.grid(alpha=0.2, axis="y")
+    plt.title(title, fontsize=10)
 
-    # hemisphere marker legend
-    from matplotlib.lines import Line2D
+    # hemisphere marker legend (for individuals)
     legend_elems = [
-        Line2D([0],[0], marker='o', color='w', label='Left (L)', markerfacecolor='black', markersize=7),
-        Line2D([0],[0], marker='x', color='black', label='Right (R)', markersize=7, linestyle='None')
+        Line2D([0],[0], marker='o', color='w', label='Left (L)',
+               markerfacecolor='#7f7f7f', alpha=0.35, markersize=7, linestyle='None'),
+        Line2D([0],[0], marker='x', color='#7f7f7f', label='Right (R)',
+               alpha=0.35, markersize=7, linestyle='None'),
     ]
     plt.legend(handles=legend_elems, title="Hemisphere", loc="best", frameon=True)
 
@@ -158,20 +205,5 @@ if not df_gen.empty:
         title="Generalizability (pairwise correlations per person)",
         out_png=os.path.join(OUTDIR, "CGI-generalizability_scatter.png"),
     )
-
-# ---------------------------
-# Optional: subject_row -> color legend image
-# ---------------------------
-if len(all_subject_rows) > 0:
-    fig, ax = plt.subplots(figsize=(8, 0.6 + 0.12 * len(all_subject_rows)))
-    ax.axis("off")
-    y = 0.9
-    for i, sr in enumerate(sorted(all_subject_rows)):
-        ax.scatter(0.02, y, s=60, color=color_lookup[sr])
-        ax.text(0.05, y, f"subject_row {sr}", va="center", fontsize=9)
-        y -= 1 / (len(all_subject_rows) + 2)
-    plt.tight_layout()
-    fig.savefig(os.path.join(OUTDIR, "CGI-subject_row_color_legend.png"), dpi=DPI)
-    plt.close(fig)
 
 print(f"Done. Wrote plots to: {OUTDIR}/")
