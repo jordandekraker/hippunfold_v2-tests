@@ -19,7 +19,7 @@ HEMIS      = ["L", "R"]
 FEATURES   = ["midthickness"]
 
 DEN    = "8k"
-LABELS = ["hipp", "dentate"]   # <-- NEW: concatenate these (in this order)
+LABELS = ["hipp", "dentate"]   # concatenate these (in this order)
 SUBDIR = "surf"  # geometry lives in *.surf.gii
 
 # Roots to micapipe derivatives where the ANTs affines live
@@ -38,9 +38,12 @@ RNG_SEED     = 42
 JITTER_STD   = 0.035
 MEAN_S       = 140
 
-QC_DICE_THRESH = 0.7
+QC_DICE_THRESH = 0.6
 QC_SUBDIR = "qc"
 QC_DESC = "unetf3d"
+
+# Outlier removal: 3 SD from the median (computed per-dataset/condition/hemi over subject-level metrics)
+OUTLIER_Z = 3.0
 
 # ---------------------------
 # Read participant lists (row aligned across datasets)
@@ -130,7 +133,6 @@ def probe_vector_length(datasets: List[str], conditions: List[str], hemis: List[
     for ds in datasets:
         for cond in conditions:
             base_dir = f"hippunfold_{ds}_{cond}"
-            # walk a couple of subjects/sessions to find a hit
             sub_dirs = sorted(glob.glob(os.path.join(base_dir, "sub-*")))
             for sub_dir in sub_dirs[:10]:
                 sub = os.path.basename(sub_dir).split("-")[-1]
@@ -155,7 +157,6 @@ def probe_vector_length(datasets: List[str], conditions: List[str], hemis: List[
                                 break
                         if ok and total > 0:
                             return total
-    # fallback: old 8k assumption, doubled for two labels
     nV_default = 8192
     F_fallback = int(len(FEATURES) * 3 * nV_default * len(LABELS))
     print(f"[INFO] probe_vector_length: using fallback F={F_fallback} (no files found during probe)")
@@ -193,7 +194,6 @@ def load_concat_vector(base_dir: str, ds: str, sub: str, ses: str, hemi: str, F_
         return np.full((F_target,), np.nan, dtype=np.float64)
 
     vecs = []
-    # Build transform path (micapipe derivatives)
     xfm_root = MICAPIPE_ROOTS.get(ds, "")
     mat_path = os.path.join(
         xfm_root,
@@ -206,7 +206,6 @@ def load_concat_vector(base_dir: str, ds: str, sub: str, ses: str, hemi: str, F_
     if A is None:
         return np.full((F_target,), np.nan, dtype=np.float64)
 
-    # Concatenate in a fixed, reproducible order: LABELS (hipp, dentate) × FEATURES
     for label in LABELS:
         for feat in FEATURES:
             p = _first_existing_path(base_dir, sub, ses, hemi, label, feat)
@@ -216,7 +215,6 @@ def load_concat_vector(base_dir: str, ds: str, sub: str, ses: str, hemi: str, F_
             if coords is None:
                 return np.full((F_target,), np.nan, dtype=np.float64)
 
-            # ---- APPLY TRANSFORM to MNI152 (linear) ----
             coords_mni = apply_affine(coords, A)
             coords_norm = coords_mni - np.nanmean(coords_mni, axis=0, keepdims=True)
             if hemi == "L":
@@ -225,7 +223,6 @@ def load_concat_vector(base_dir: str, ds: str, sub: str, ses: str, hemi: str, F_
             vecs.append(arr)
 
     cat = np.concatenate(vecs, axis=0) if vecs else np.empty((0,), dtype=np.float64)
-    # Pad/truncate to target length to keep array shapes consistent
     out = np.full((F_target,), np.nan, dtype=np.float64)
     n = min(F_target, cat.size)
     if n > 0:
@@ -235,17 +232,14 @@ def load_concat_vector(base_dir: str, ds: str, sub: str, ses: str, hemi: str, F_
 # ===========================
 # Allocate, populate, and compute metrics
 # ===========================
-# 1) Probe F dynamically (total concatenated feature length)
 F = probe_vector_length(DATASETS, CONDITIONS, HEMIS)
 print(f"[INFO] Using F={F} features per hemi (concat of {LABELS} × {FEATURES} × xyz)")
 
-# 2) Allocate big tensor: X[d,c,h,s,t,f] filled with NaN
 X = np.full(
     (len(DATASETS), len(CONDITIONS), len(HEMIS), max_subject_rows, MAX_SESSIONS, F),
     np.nan, dtype=np.float64
 )
 
-# 3) Populate X from disk
 for d_i, ds in enumerate(DATASETS):
     subj_ids = tables.get(ds, [])
     for c_i, cond in enumerate(CONDITIONS):
@@ -299,12 +293,12 @@ for d_i, ds in enumerate(DATASETS):
                 else:
                     cors = []
                     for i in range(len(sess_vecs)):
-                        for j in range(i+1, len(sess_vecs)):
+                        for j in range(i + 1, len(sess_vecs)):
                             cors.append(pearsonr_nan(sess_vecs[i], sess_vecs[j]))
                     cons = np.nanmean(cors) if len(cors) else np.nan
                 rows_consistency.append([ds, cond, hemi, s_i, cons])
 
-df_cons = pd.DataFrame(rows_consistency, columns=["dataset","condition","hemi","subject_row","consistency"])
+df_cons = pd.DataFrame(rows_consistency, columns=["dataset", "condition", "hemi", "subject_row", "consistency"])
 
 # ---------------------------
 # Block 2: Identifiability (normalized separation)
@@ -331,23 +325,23 @@ for d_i, ds in enumerate(DATASETS):
                         cors.append(pearsonr_nan(m_this, m_other))
                     between = np.nanmean(cors) if len(cors) else np.nan
                     cons_row = df_cons[
-                        (df_cons["dataset"]==ds) &
-                        (df_cons["condition"]==cond) &
-                        (df_cons["hemi"]==hemi) &
-                        (df_cons["subject_row"]==s_i)
+                        (df_cons["dataset"] == ds) &
+                        (df_cons["condition"] == cond) &
+                        (df_cons["hemi"] == hemi) &
+                        (df_cons["subject_row"] == s_i)
                     ]
-                    cons = cons_row["consistency"].values[0] if len(cons_row)==1 else np.nan
-                    ident = ((cons - between) / cons ) if (not np.isnan(between) and not np.isnan(cons) and cons != 0) else np.nan
+                    cons = cons_row["consistency"].values[0] if len(cons_row) == 1 else np.nan
+                    ident = ((cons - between) / cons) if (not np.isnan(between) and not np.isnan(cons) and cons != 0) else np.nan
                 rows_ident.append([ds, cond, hemi, s_i, ident])
 
-df_ident = pd.DataFrame(rows_ident, columns=["dataset","condition","hemi","subject_row","identifiability"])
+df_ident = pd.DataFrame(rows_ident, columns=["dataset", "condition", "hemi", "subject_row", "identifiability"])
 
 # ---------------------------
 # Block 3: Generalizability (pairwise: PNI–MICs)
 # ---------------------------
-PAIR_NAMES = [("PNI","MICs")]
+PAIR_NAMES = [("PNI", "MICs")]
 rows_gen = []
-ds_to_idx = {ds:i for i,ds in enumerate(DATASETS)}
+ds_to_idx = {ds: i for i, ds in enumerate(DATASETS)}
 
 for c_i, cond in enumerate(CONDITIONS):
     for h_i, hemi in enumerate(HEMIS):
@@ -367,16 +361,62 @@ for c_i, cond in enumerate(CONDITIONS):
 
 df_gen = pd.DataFrame(
     rows_gen,
-    columns=["dataset_pair","condition","hemi","subject_row","generalizability"]
+    columns=["dataset_pair", "condition", "hemi", "subject_row", "generalizability"]
+)
+
+# ---------------------------
+# NEW: Outlier removal (3 SD from median) per dataset/condition/hemi/measure
+# ---------------------------
+def remove_outliers_3sd_from_median(df: pd.DataFrame, value_col: str, group_cols: List[str]) -> pd.DataFrame:
+    """
+    Set outliers to NaN (not drop rows) using criterion:
+      |x - median| > OUTLIER_Z * std
+    where median/std computed within each group over finite values.
+    """
+    out = df.copy()
+    if out.empty:
+        return out
+
+    # ensure numeric
+    out[value_col] = pd.to_numeric(out[value_col], errors="coerce")
+
+    def _mask_group(g: pd.DataFrame) -> pd.Series:
+        v = g[value_col].to_numpy(dtype=float)
+        m = np.isfinite(v)
+        if m.sum() < 3:
+            return pd.Series([False] * len(g), index=g.index)
+        med = float(np.nanmedian(v))
+        sd = float(np.nanstd(v, ddof=1))
+        if not np.isfinite(sd) or sd == 0:
+            return pd.Series([False] * len(g), index=g.index)
+        z = np.abs(v - med) / sd
+        return pd.Series(z > OUTLIER_Z, index=g.index)
+
+    mask_outlier = out.groupby(group_cols, group_keys=False).apply(_mask_group)
+    n_out = int(np.nansum(mask_outlier.to_numpy(dtype=bool)))
+    if n_out > 0:
+        print(f"[INFO] Outlier filter: setting {n_out} values to NaN in {value_col} (groups={group_cols}, z>{OUTLIER_Z})")
+        out.loc[mask_outlier, value_col] = np.nan
+    return out
+
+# Apply to each metric table
+df_cons = remove_outliers_3sd_from_median(
+    df_cons, value_col="consistency", group_cols=["dataset", "condition", "hemi"]
+)
+df_ident = remove_outliers_3sd_from_median(
+    df_ident, value_col="identifiability", group_cols=["dataset", "condition", "hemi"]
+)
+df_gen = remove_outliers_3sd_from_median(
+    df_gen, value_col="generalizability", group_cols=["dataset_pair", "condition", "hemi"]
 )
 
 # ---------------------------
 # Save combined CSV
 # ---------------------------
 df_all = pd.concat([
-    df_cons.assign(measure="consistency",       value=df_cons["consistency"])[["dataset","condition","hemi","subject_row","measure","value"]],
-    df_ident.assign(measure="identifiability",  value=df_ident["identifiability"])[["dataset","condition","hemi","subject_row","measure","value"]],
-    df_gen.assign(measure="generalizability",   value=df_gen["generalizability"])[["dataset_pair","condition","hemi","subject_row","measure","value"]],
+    df_cons.assign(measure="consistency",      value=df_cons["consistency"])[["dataset","condition","hemi","subject_row","measure","value"]],
+    df_ident.assign(measure="identifiability", value=df_ident["identifiability"])[["dataset","condition","hemi","subject_row","measure","value"]],
+    df_gen.assign(measure="generalizability",  value=df_gen["generalizability"])[["dataset_pair","condition","hemi","subject_row","measure","value"]],
 ], ignore_index=True)
 
 df_all.to_csv("metrics_per_subject.csv", index=False)
