@@ -5,7 +5,6 @@ import os, glob, re
 import numpy as np
 import nibabel as nib
 import pandas as pd
-import matplotlib.pyplot as plt
 from pathlib import Path
 import SimpleITK as sitk
 from typing import Optional, Tuple, List
@@ -19,7 +18,7 @@ HEMIS      = ["L", "R"]
 FEATURES   = ["midthickness"]
 
 DEN    = "8k"
-LABELS = ["hipp", "dentate"]   # concatenate these (in this order)
+LABELS = ["hipp"]#, "dentate"]   # concatenate these (in this order)
 SUBDIR = "surf"  # geometry lives in *.surf.gii
 
 # Roots to micapipe derivatives where the ANTs affines live
@@ -204,15 +203,18 @@ def load_concat_vector(base_dir: str, ds: str, sub: str, ses: str, hemi: str, F_
     )
     A = read_ants_rigid_4x4(mat_path)
     if A is None:
+        print(f"[MISS-XFM] ds={ds} cond=? base_dir={base_dir} sub={sub} ses={ses} hemi={hemi} mat={mat_path}")
         return np.full((F_target,), np.nan, dtype=np.float64)
 
     for label in LABELS:
         for feat in FEATURES:
             p = _first_existing_path(base_dir, sub, ses, hemi, label, feat)
             if p is None:
+                print(f"[MISS-SURF] base_dir={base_dir} sub={sub} ses={ses} hemi={hemi} label={label} feat={feat}")
                 return np.full((F_target,), np.nan, dtype=np.float64)
             coords = _load_coords(p)
             if coords is None:
+                print(f"[BAD-SURF]  path={p}")
                 return np.full((F_target,), np.nan, dtype=np.float64)
 
             coords_mni = apply_affine(coords, A)
@@ -421,3 +423,40 @@ df_all = pd.concat([
 
 df_all.to_csv("metrics_per_subject.csv", index=False)
 print("Done. Wrote metrics_per_subject.csv")
+
+# ---------------------------
+# Summary: number of valid subjects per group
+# ---------------------------
+print("\n=== Valid subject counts (non-NaN values) ===")
+
+def print_counts(df, measure_name, dataset_col="dataset"):
+    if df.empty:
+        print(f"[{measure_name}] No data.")
+        return
+
+    print(f"\n--- {measure_name} ---")
+
+    group_cols = [dataset_col, "condition", "hemi"]
+
+    grouped = (
+        df
+        .groupby(group_cols)["subject_row"]
+        .apply(lambda x: x[~df.loc[x.index, df.columns[-1]].isna()].nunique())
+        .reset_index(name="N_subjects")
+    )
+
+    for _, row in grouped.iterrows():
+        ds = row[dataset_col]
+        cond = row["condition"]
+        hemi = row["hemi"]
+        n = int(row["N_subjects"])
+        print(f"{ds} | {cond} | hemi-{hemi}: N = {n}")
+
+# Consistency
+print_counts(df_cons, "Consistency")
+
+# Identifiability
+print_counts(df_ident, "Identifiability")
+
+# Generalizability (dataset_pair column instead of dataset)
+print_counts(df_gen, "Generalizability", dataset_col="dataset_pair")
