@@ -12,6 +12,9 @@ import statsmodels.formula.api as smf
 from statsmodels.stats.anova import AnovaRM
 import pyvista as pv
 from datetime import datetime
+import matplotlib as mpl
+mpl.rcParams['axes.spines.right'] = False
+mpl.rcParams['axes.spines.top'] = False
 
 # Configuration
 DATASETS = ["BIDS_MICs", "BIDS_PNI"]
@@ -261,7 +264,7 @@ def collect_overall_means(version_dirs, ds, hemi, session_pairs):
     return out
 
 
-def scatter_block(df_sub, value_col, labels, group_cols, title, out_png):
+def scatter_block(df_sub, value_col, labels, group_cols, out_png):
     """Create scatter plot with grey jittered individuals + colored mean±SD."""
     import numpy as np
     import matplotlib.pyplot as plt
@@ -272,12 +275,8 @@ def scatter_block(df_sub, value_col, labels, group_cols, title, out_png):
 
     # group colors (nice defaults; will cycle if more than 2 labels)
     palette = [
-        "#1f77b4",  # blue
-        "#ff7f0e",  # orange
-        "#2ca02c",  # green
+        "#8a8a8a",  # grey
         "#d62728",  # red
-        "#9467bd",  # purple
-        "#8c564b",  # brown
     ]
     label_to_color = {lab: palette[i % len(palette)] for i, lab in enumerate(labels)}
 
@@ -338,27 +337,16 @@ def scatter_block(df_sub, value_col, labels, group_cols, title, out_png):
             zorder=5,                    # above individuals
         )
 
-    # Legend: hemisphere markers (individuals)
-    legend_elems = [
-        Line2D([0], [0], marker='o', color='w', label='Left (L)',
-               markerfacecolor='#7f7f7f', alpha=0.35, markersize=7, linestyle='None'),
-        Line2D([0], [0], marker='x', color='#7f7f7f', label='Right (R)',
-               alpha=0.35, markersize=7, linestyle='None'),
-    ]
-    plt.legend(handles=legend_elems, title="Hemisphere", loc="best", frameon=True)
-
     plt.xticks(xs, ["/".join(map(str, lab)) for lab in labels])
     plt.grid(alpha=0.2, axis="y")
-    plt.title(title, fontsize=10)
     plt.tight_layout()
     plt.savefig(out_png, dpi=200)
     plt.close()
 
 
-def plot_corr_matrix_LR(ax, corr, n_left, title):
+def plot_corr_matrix_LR(ax, corr, n_left):
     """Plot correlation matrix with L/R boundary."""
     im = ax.imshow(corr, vmin=0.9, vmax=1.0, cmap="coolwarm", interpolation="nearest")
-    ax.set_title(title)
     ax.set_xticks([])
     ax.set_yticks([])
     
@@ -577,7 +565,7 @@ for dataset in DATASETS:
                        ignore_index=True)
     
     # Save CSV
-    csv_path = f"metrics_per_subject_versions_{dataset}_pairs.csv"
+    csv_path = f"plots_versions/metrics_per_subject_versions_{dataset}_pairs.csv"
     df_all.to_csv(csv_path, index=False)
     print(f"Wrote {csv_path}")
     
@@ -593,7 +581,6 @@ for dataset in DATASETS:
         value_col="metric",
         labels=labels_c,
         group_cols=["version"],
-        title=f"Consistency — {dataset}",
         out_png=str(OUTDIR / f"consistency_scatter_{dataset}.png"),
     )
     print(f"Saved: {OUTDIR / f'consistency_scatter_{dataset}.png'}")
@@ -605,7 +592,6 @@ for dataset in DATASETS:
         value_col="metric",
         labels=labels_i,
         group_cols=["version"],
-        title=f"Identifiability — {dataset}",
         out_png=str(OUTDIR / f"identifiability_scatter_{dataset}.png"),
     )
     print(f"Saved: {OUTDIR / f'identifiability_scatter_{dataset}.png'}")
@@ -617,7 +603,6 @@ for dataset in DATASETS:
         value_col="metric",
         labels=labels_q,
         group_cols=["version"],
-        title=f"Cell Quality (hipp+dentate) — {dataset}",
         out_png=str(OUTDIR / f"cellquality_scatter_{dataset}.png"),
     )
     print(f"Saved: {OUTDIR / f'cellquality_scatter_{dataset}.png'}")
@@ -644,7 +629,7 @@ for dataset in DATASETS:
         
         corr = np.corrcoef(M)
         fig, ax = plt.subplots(1, 1, figsize=(6.5, 5.5), constrained_layout=True)
-        im = plot_corr_matrix_LR(ax, corr, n_left, f"{ver}: L↔R combined")
+        im = plot_corr_matrix_LR(ax, corr, n_left)
         fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04).ax.set_ylabel('r', rotation=0, labelpad=10)
         out_path = OUTDIR / f"corrmat_{ver}_{dataset}.png"
         fig.savefig(out_path, dpi=200)
