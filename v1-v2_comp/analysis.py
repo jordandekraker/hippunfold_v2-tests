@@ -301,7 +301,7 @@ def scatter_block(df_sub, value_col, labels, group_cols, out_png):
                     jit[j], vals[j],
                     s=30,
                     alpha=0.35,
-                    color="#7f7f7f",
+                    color=palette[x],
                     marker=marker,
                     linewidths=0,
                     zorder=1,
@@ -311,7 +311,7 @@ def scatter_block(df_sub, value_col, labels, group_cols, out_png):
                     jit[j], vals[j],
                     s=30,
                     alpha=0.35,
-                    color="#7f7f7f",
+                    color=palette[x],
                     marker=marker,
                     zorder=1,
                 )
