@@ -155,6 +155,42 @@ def _paired_permutation_pvalue(
     p = (1.0 + float(extreme)) / (1.0 + float(n_perm))
     return float(max(min(p, 1.0), 0.0))
 
+def cohens_d_paired(a, b):
+    """
+    Compute paired Cohen's d (dz).
+
+    Parameters
+    ----------
+    a, b : array-like
+        Paired observations (same length).
+
+    Returns
+    -------
+    d_z : float
+        Cohen's d for paired samples (mean difference / SD of differences).
+    """
+    a = np.asarray(a, dtype=float)
+    b = np.asarray(b, dtype=float)
+
+    if a.shape != b.shape:
+        raise ValueError("Inputs must have the same shape for paired comparison.")
+
+    # Drop NaNs pairwise
+    mask = np.isfinite(a) & np.isfinite(b)
+    a = a[mask]
+    b = b[mask]
+
+    if len(a) < 2:
+        raise ValueError("Not enough valid paired observations.")
+
+    diff = b - a
+    mean_diff = np.mean(diff)
+    sd_diff = np.std(diff, ddof=1)
+
+    if sd_diff == 0:
+        return np.nan  # undefined
+
+    return mean_diff / sd_diff
 
 def _p_to_stars(p: float) -> str:
     if p < 0.001:
@@ -362,6 +398,7 @@ def main():
                     + 7
                 )
                 p = _paired_permutation_pvalue(a2, b2, n_perm=N_PERMUTATIONS, seed=seed_local, two_sided=True)
+                d = cohens_d_paired(a2,b2)
 
                 rows.append(
                     dict(
@@ -373,13 +410,14 @@ def main():
                         old_mean=float(np.mean(a2)),
                         new_mean=float(np.mean(b2)),
                         diff_mean=float(np.mean(b2 - a2)),
+                        cohens_dz=float(d),
                         p_paired_perm=float(p),
                         n_perm=int(N_PERMUTATIONS),
                         sig=_p_to_stars(p),
                     )
                 )
     if rows:
-        df = pd.DataFrame(rows).sort_values(["metric", "feat", "clf"])
+        df = pd.DataFrame(rows)
         out_csv = os.path.join(args.outdir, "summary_permtest_fixed_feats_test.csv")
         df.to_csv(out_csv, index=False)
         print(f"[WROTE] {out_csv}")

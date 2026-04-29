@@ -11,7 +11,6 @@ import pandas as pd
 import statsmodels.formula.api as smf
 from statsmodels.stats.anova import AnovaRM
 import pyvista as pv
-from datetime import datetime
 import matplotlib as mpl
 mpl.rcParams['axes.spines.right'] = False
 mpl.rcParams['axes.spines.top'] = False
@@ -57,12 +56,10 @@ class Logger:
 
 
 # Initialize logger
-timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-log_file = OUTDIR / f"analysis_log_{timestamp}.txt"
+log_file = OUTDIR / f"analysis_log.txt"
 logger = Logger(log_file)
 sys.stdout = logger
 
-print(f"Analysis started at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
 print(f"Log file: {log_file}")
 print("="*60)
 
@@ -328,8 +325,8 @@ def scatter_block(df_sub, value_col, labels, group_cols, out_png):
             markersize=10,               # large mean dot
             markerfacecolor=c,
             markeredgecolor="black",
-            markeredgewidth=0.9,
-            ecolor=c,
+            markeredgewidth=1.4,
+            ecolor="black",
             elinewidth=2.8,              # thick -> visible
             capsize=5,
             capthick=2.8,
@@ -436,6 +433,87 @@ def run_rm_version_only(df_all, measure_name, subject_col="subject_id"):
         mdf = md.fit(method="lbfgs", reml=True, maxiter=200, disp=False)
         print(mdf.summary())
 
+import numpy as np
+import pandas as pd
+
+def run_cohens_d_version_only(df_all, measure_name, subject_col="subject_id"):
+    """
+    Compute Cohen's d for paired version comparison.
+
+    Uses subject-level means per version, then computes paired Cohen's dz:
+        d_z = mean(diff) / sd(diff)
+
+    Assumes exactly two version levels.
+    """
+    df_m = df_all[df_all["measure"] == measure_name].dropna(subset=["value"]).copy()
+    if df_m.empty:
+        print(f"\n[Cohen's d] {measure_name}: no data")
+        return None
+
+    # Collapse to subject x version means
+    df_cell = (
+        df_m.groupby([subject_col, "version"], dropna=False, as_index=False)["value"]
+            .mean()
+            .rename(columns={"value": "cell_mean"})
+    ).dropna(subset=["cell_mean"])
+
+    ver_levels = sorted(df_cell["version"].unique())
+
+    print(f"\nCohen's d for {measure_name} (paired within-subject version comparison)")
+    print(f"Subjects total: {df_cell[subject_col].nunique()}")
+    print(f"Version levels: {ver_levels}")
+
+    if len(ver_levels) != 2:
+        print(f"[Warning] Cohen's d version comparison expects exactly 2 versions, found {len(ver_levels)}.")
+        return None
+
+    # Wide format: one row per subject, one column per version
+    wide = df_cell.pivot(index=subject_col, columns="version", values="cell_mean")
+
+    # Keep only complete paired subjects
+    wide = wide.dropna(subset=ver_levels)
+    n = len(wide)
+
+    print(f"Complete paired subjects: {n}")
+
+    if n < 2:
+        print("Not enough paired subjects to compute Cohen's d.")
+        return None
+
+    v0, v1 = ver_levels
+    diff = wide[v1] - wide[v0]
+
+    mean0 = wide[v0].mean()
+    mean1 = wide[v1].mean()
+    mean_diff = diff.mean()
+    sd_diff = diff.std(ddof=1)
+
+    if sd_diff == 0:
+        d_z = np.nan
+        print("[Warning] Difference SD is zero; Cohen's dz is undefined.")
+    else:
+        d_z = mean_diff / sd_diff
+
+    result = {
+        "measure": measure_name,
+        "version_0": v0,
+        "version_1": v1,
+        "n": n,
+        "mean_version_0": mean0,
+        "mean_version_1": mean1,
+        "mean_diff": mean_diff,
+        "sd_diff": sd_diff,
+        "cohens_dz": d_z,
+    }
+
+    print(f"{v1} - {v0}")
+    print(f"Mean {v0}: {mean0:.6g}")
+    print(f"Mean {v1}: {mean1:.6g}")
+    print(f"Mean difference: {mean_diff:.6g}")
+    print(f"SD difference: {sd_diff:.6g}")
+    print(f"Cohen's dz: {d_z:.6g}")
+
+    return result
 
 def concat_two_meshes_to_polydata(path_a, path_b):
     """Concatenate two triangle meshes (A then B) into a single PolyData."""
@@ -639,11 +717,11 @@ for dataset in DATASETS:
     # Run statistical tests
     for measure in ["consistency", "identifiability", "cell_quality"]:
         run_rm_version_only(df_all, measure_name=measure, subject_col="subject_id")
+        run_cohens_d_version_only(df_all, measure_name=measure, subject_col="subject_id")
 
 print(f"\n{'='*60}")
 print("All datasets processed successfully!")
 print(f"{'='*60}")
-print(f"Analysis completed at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
 
 # Close logger
 logger.close()
