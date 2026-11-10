@@ -5,4 +5,13 @@ unet_comp/BIDS_*/
 unet_comp/hippunfold_*/
 unet_comp/BIDS_*
 unet_comp/hippunfold_*
+noise_titration/__pycache__/
+runtime/
 .cache/
+.sge/
+.gitattributes
+# pixi environments
+.pixi/*
+!.pixi/config.toml
+pixi*
+.pixi*

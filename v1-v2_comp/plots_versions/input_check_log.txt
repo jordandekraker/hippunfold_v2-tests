@@ -1,0 +1,10 @@
+Log file: /host/cassio/export03/data/jordand/hippunfold_v2-tests/v1-v2_comp/plots_versions/input_check_log.txt
+PyVista: 0.49.2; comparison roots: {'v1.5.1': PosixPath('/data/mica3/BIDS_MICs/derivatives/hippunfold_v1.3.0/hippunfold'), 'v2.4.0': PosixPath('/host/cassio/export03/data/jordand/hippunfold_v2-tests/v1-v2_comp/BIDS_MICs/hippunfold_v2.4')}
+Input coverage BIDS_MICs v1.5.1: 200/200 subject/session/hemisphere entries
+Geometry check BIDS_MICs v1.5.1: 27150 coordinates; scaled Jacobian=0.583753
+Input coverage BIDS_MICs v2.4.0: 200/200 subject/session/hemisphere entries
+Geometry check BIDS_MICs v2.4.0: 30720 coordinates; scaled Jacobian=0.610489
+Input coverage BIDS_PNI v1.5.1: 60/60 subject/session/hemisphere entries
+Geometry check BIDS_PNI v1.5.1: 27150 coordinates; scaled Jacobian=0.588673
+Input coverage BIDS_PNI v2.4.0: 60/60 subject/session/hemisphere entries
+Geometry check BIDS_PNI v2.4.0: 30720 coordinates; scaled Jacobian=0.632764

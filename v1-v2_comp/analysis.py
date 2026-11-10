@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 import os
 import sys
+import argparse
+from functools import lru_cache
 import numpy as np
 import nibabel as nib
 import matplotlib.pyplot as plt
@@ -16,6 +18,7 @@ mpl.rcParams['axes.spines.right'] = False
 mpl.rcParams['axes.spines.top'] = False
 
 # Configuration
+SCRIPT_DIR = Path(__file__).resolve().parent
 DATASETS = ["BIDS_MICs", "BIDS_PNI"]
 LABELS = ["hipp", "dentate"]
 DATASET_SESSION_CONFIG = {
@@ -24,8 +27,7 @@ DATASET_SESSION_CONFIG = {
 }
 HEMI_ORDER = ["L", "R"]
 ALLOWED_DEN = {"8k", "0p5mm"}
-OUTDIR = Path("plots_versions")
-OUTDIR.mkdir(parents=True, exist_ok=True)
+OUTDIR = SCRIPT_DIR / "plots_versions"
 
 # Plot settings
 JITTER_STD = 0.035
@@ -55,25 +57,14 @@ class Logger:
         self.log.close()
 
 
-# Initialize logger
-log_file = OUTDIR / f"analysis_log.txt"
-logger = Logger(log_file)
-sys.stdout = logger
-
-print(f"Log file: {log_file}")
-print("="*60)
-
-
 def get_version_dirs(dataset):
     return {
         "v1.5.1": Path(f"/data/mica3/{dataset}/derivatives/hippunfold_v1.3.0/hippunfold"),
-        "v2.0.0": Path(f"/export03/data/opt/hippunfold_v2-tests/v1-v2_comp/{dataset}/hippunfold_v2.0.0"),
+        "v2.4.0": SCRIPT_DIR / dataset / "hippunfold_v2.4",
     }
 
 
 def micapipe_root_for_affine(ds):
-    if ds == "BIDS_bMICs":
-        return "/data/mica3/BIDS_MICs/derivatives/micapipe_v0.2.0"
     return f"/data/mica3/{ds}/derivatives/micapipe_v0.2.0"
 
 
@@ -116,6 +107,7 @@ def apply_affine(points_xyz, A):
     return (A @ homo.T).T[:, :3]
 
 
+@lru_cache(maxsize=None)
 def affine_for(ds, subj, ses):
     """Get affine transform for subject/session."""
     root = micapipe_root_for_affine(ds)
@@ -179,6 +171,7 @@ def pearsonr_nan(a, b):
     return float(np.corrcoef(a2, b2)[0, 1])
 
 
+@lru_cache(maxsize=None)
 def get_session_vector(ver_root, ds, subj, ses, hemi):
     """Get normalized vertex vector for a session."""
     A = affine_for(ds, subj, ses)
@@ -210,7 +203,7 @@ def collect_all_sessions(version_dirs, ds, hemi, session_pairs):
     all_sessions = sorted({s for pair in session_pairs for s in pair})
     out = {}
     
-    with open(f"{ds}/participants.txt", "r") as f:
+    with open(SCRIPT_DIR / ds / "participants.txt", "r") as f:
         subjects = sorted(set(f.read().split()))
     
     for ver, root in version_dirs.items():
@@ -231,7 +224,7 @@ def collect_overall_means(version_dirs, ds, hemi, session_pairs):
     all_sessions = sorted({s for pair in session_pairs for s in pair})
     out = {}
     
-    with open(f"{ds}/participants.txt", "r") as f:
+    with open(SCRIPT_DIR / ds / "participants.txt", "r") as f:
         subjects = sorted(set(f.read().split()))
     
     for ver, root in version_dirs.items():
@@ -536,8 +529,13 @@ def compute_cell_quality_for_session(ver_root, dataset, subj, ses, hemi):
     
     try:
         poly = concat_two_meshes_to_polydata(surf_hipp, surf_dentate)
-        qmesh = poly.compute_cell_quality()  # VTK default quality measure
-        q = np.asarray(qmesh["CellQuality"], dtype=float)
+        # Preserve the original scaled-Jacobian measure across PyVista APIs.
+        if hasattr(poly, "cell_quality"):
+            qmesh = poly.cell_quality(quality_measure="scaled_jacobian")
+            q = np.asarray(qmesh["scaled_jacobian"], dtype=float)
+        else:
+            qmesh = poly.compute_cell_quality(quality_measure="scaled_jacobian")
+            q = np.asarray(qmesh["CellQuality"], dtype=float)
         
         if q.size == 0:
             return None, None
@@ -550,179 +548,243 @@ def compute_cell_quality_for_session(ver_root, dataset, subj, ses, hemi):
         return None, None
 
 
-# MAIN LOOP
-for dataset in DATASETS:
-    print(f"\n{'='*60}")
-    print(f"Processing dataset: {dataset}")
-    print(f"{'='*60}")
-    
-    session_pairs = DATASET_SESSION_CONFIG[dataset]
-    version_dirs = get_version_dirs(dataset)
-    
-    with open(f"{dataset}/participants.txt", "r") as f:
-        subjects = sorted(set(f.read().split()))
-    
-    print(f"Subjects: {len(subjects)}")
-    print(f"Session pairs: {session_pairs}")
-    
-    # Collect all data
-    session_bank = {hemi: collect_all_sessions(version_dirs, dataset, hemi, session_pairs) 
-                    for hemi in HEMI_ORDER}
-    overall_means = {hemi: collect_overall_means(version_dirs, dataset, hemi, session_pairs) 
-                     for hemi in HEMI_ORDER}
-    
-    # Get all unique sessions from session pairs
-    all_sessions = sorted({s for pair in session_pairs for s in pair})
-    
-    # Compute consistency and identifiability
-    rows_cons = []
-    rows_ident = []
-    
-    # NEW: Compute cell quality for all sessions
-    rows_quality = []
-    
-    for ver, ver_root in version_dirs.items():
-        for hemi in HEMI_ORDER:
-            for subj in subjects:
-                # Compute cell quality for each session
-                for ses in all_sessions:
-                    mu, sd = compute_cell_quality_for_session(ver_root, dataset, subj, ses, hemi)
-                    if mu is not None:
-                        rows_quality.append([ver, hemi, subj, ses, mu, sd])
-                
-                # Compute consistency and identifiability for session pairs
-                for (sesA, sesB) in session_pairs:
-                    vA = get_session_vector(ver_root, dataset, subj, sesA, hemi)
-                    vB = get_session_vector(ver_root, dataset, subj, sesB, hemi)
-                    
-                    if vA is None or vB is None or vA.size != vB.size or vA.size < 3:
-                        continue
-                    
-                    # Consistency: within-subject correlation
-                    C_pair = pearsonr_nan(vA, vB)
-                    if np.isnan(C_pair):
-                        continue
-                    rows_cons.append([ver, hemi, subj, f"{sesA}_{sesB}", float(C_pair)])
-                    
-                    # Identifiability: (C - B) / C where B is mean vs others
-                    m_this_pair = np.nanmean(np.vstack([vA, vB]), axis=0)
-                    bank = session_bank[hemi][ver]
-                    cors = []
-                    for other in subjects:
-                        if other == subj:
+def run_analysis():
+    # MAIN LOOP
+    for dataset in DATASETS:
+        print(f"\n{'='*60}")
+        print(f"Processing dataset: {dataset}")
+        print(f"{'='*60}")
+
+        session_pairs = DATASET_SESSION_CONFIG[dataset]
+        version_dirs = get_version_dirs(dataset)
+
+        with open(SCRIPT_DIR / dataset / "participants.txt", "r") as f:
+            subjects = sorted(set(f.read().split()))
+
+        print(f"Subjects: {len(subjects)}")
+        print(f"Session pairs: {session_pairs}")
+
+        # Collect all data
+        session_bank = {hemi: collect_all_sessions(version_dirs, dataset, hemi, session_pairs)
+                        for hemi in HEMI_ORDER}
+        overall_means = {hemi: collect_overall_means(version_dirs, dataset, hemi, session_pairs)
+                         for hemi in HEMI_ORDER}
+
+        # Get all unique sessions from session pairs
+        all_sessions = sorted({s for pair in session_pairs for s in pair})
+
+        # Compute consistency and identifiability
+        rows_cons = []
+        rows_ident = []
+
+        # NEW: Compute cell quality for all sessions
+        rows_quality = []
+
+        for ver, ver_root in version_dirs.items():
+            for hemi in HEMI_ORDER:
+                for subj in subjects:
+                    # Compute cell quality for each session
+                    for ses in all_sessions:
+                        mu, sd = compute_cell_quality_for_session(ver_root, dataset, subj, ses, hemi)
+                        if mu is not None:
+                            rows_quality.append([ver, hemi, subj, ses, mu, sd])
+
+                    # Compute consistency and identifiability for session pairs
+                    for (sesA, sesB) in session_pairs:
+                        vA = get_session_vector(ver_root, dataset, subj, sesA, hemi)
+                        vB = get_session_vector(ver_root, dataset, subj, sesB, hemi)
+
+                        if vA is None or vB is None or vA.size != vB.size or vA.size < 3:
                             continue
-                        for v_other in bank.get(other, []):
-                            if v_other is None or v_other.size != m_this_pair.size:
+
+                        # Consistency: within-subject correlation
+                        C_pair = pearsonr_nan(vA, vB)
+                        if np.isnan(C_pair):
+                            continue
+                        rows_cons.append([ver, hemi, subj, f"{sesA}_{sesB}", float(C_pair)])
+
+                        # Identifiability: (C - B) / C where B is mean vs others
+                        m_this_pair = np.nanmean(np.vstack([vA, vB]), axis=0)
+                        bank = session_bank[hemi][ver]
+                        cors = []
+                        for other in subjects:
+                            if other == subj:
                                 continue
-                            rbo = pearsonr_nan(m_this_pair, v_other)
-                            if not np.isnan(rbo):
-                                cors.append(rbo)
-                    
-                    B_pair = np.mean(cors) if cors else np.nan
-                    I_pair = ((C_pair - B_pair) / C_pair) if (not np.isnan(B_pair) and C_pair != 0) else np.nan
-                    rows_ident.append([ver, hemi, subj, f"{sesA}_{sesB}", I_pair])
-    
-    # Create DataFrames
-    df_cons = pd.DataFrame(rows_cons, columns=["version", "hemi", "subject_id", "pair", "consistency"])
-    df_ident = pd.DataFrame(rows_ident, columns=["version", "hemi", "subject_id", "pair", "identifiability"])
-    df_quality = pd.DataFrame(rows_quality, columns=["version", "hemi", "subject_id", "session", "quality_mean", "quality_std"])
-    
-    df_all = pd.concat([
-        df_cons.assign(measure="consistency", value=df_cons["consistency"])[
-            ["version", "hemi", "subject_id", "pair", "measure", "value"]],
-        df_ident.assign(measure="identifiability", value=df_ident["identifiability"])[
-            ["version", "hemi", "subject_id", "pair", "measure", "value"]],
-    ], ignore_index=True)
-    
-    # Add cell quality as a measure (keep per-session for plotting, but use session as "pair")
-    df_quality_measure = df_quality.copy()
-    df_quality_measure["measure"] = "cell_quality"
-    df_quality_measure = df_quality_measure.rename(columns={"quality_mean": "value", "session": "pair"})
-    
-    df_all = pd.concat([df_all, df_quality_measure[["version", "hemi", "subject_id", "pair", "measure", "value"]]], 
-                       ignore_index=True)
-    
-    # Save CSV
-    csv_path = f"plots_versions/metrics_per_subject_versions_{dataset}_pairs.csv"
-    df_all.to_csv(csv_path, index=False)
-    print(f"Wrote {csv_path}")
-    
-    # Create color map for subjects
-    all_subjects = sorted(df_all["subject_id"].dropna().unique())
-    cmap = plt.get_cmap(PALETTE, max(len(all_subjects), 1))
-    color_lookup = {sid: cmap(i % cmap.N) for i, sid in enumerate(all_subjects)}
-    
-    # Plot consistency
-    labels_c = [(ver,) for ver in version_dirs.keys()]
-    scatter_block(
-        df_sub=df_all[df_all["measure"] == "consistency"].rename(columns={"value": "metric"}),
-        value_col="metric",
-        labels=labels_c,
-        group_cols=["version"],
-        out_png=str(OUTDIR / f"consistency_scatter_{dataset}.png"),
-    )
-    print(f"Saved: {OUTDIR / f'consistency_scatter_{dataset}.png'}")
-    
-    # Plot identifiability
-    labels_i = [(ver,) for ver in version_dirs.keys()]
-    scatter_block(
-        df_sub=df_all[df_all["measure"] == "identifiability"].rename(columns={"value": "metric"}),
-        value_col="metric",
-        labels=labels_i,
-        group_cols=["version"],
-        out_png=str(OUTDIR / f"identifiability_scatter_{dataset}.png"),
-    )
-    print(f"Saved: {OUTDIR / f'identifiability_scatter_{dataset}.png'}")
-    
-    # Plot cell quality
-    labels_q = [(ver,) for ver in version_dirs.keys()]
-    scatter_block(
-        df_sub=df_all[df_all["measure"] == "cell_quality"].rename(columns={"value": "metric"}),
-        value_col="metric",
-        labels=labels_q,
-        group_cols=["version"],
-        out_png=str(OUTDIR / f"cellquality_scatter_{dataset}.png"),
-    )
-    print(f"Saved: {OUTDIR / f'cellquality_scatter_{dataset}.png'}")
-    
-    # Plot correlation matrices
-    for ver in version_dirs.keys():
-        ids_L, means_L = collect_subj_overall_means_for(ver, "L", overall_means, subjects)
-        ids_R, means_R = collect_subj_overall_means_for(ver, "R", overall_means, subjects)
-        
-        if len(means_L) + len(means_R) < 2:
-            continue
-        
-        # Combine L and R
-        blocks = []
-        if len(means_L) > 0:
-            blocks.append(np.vstack(means_L))
-        n_left = blocks[0].shape[0] if blocks else 0
-        if len(means_R) > 0:
-            blocks.append(np.vstack(means_R))
-        
-        M = np.vstack(blocks) if blocks else None
-        if M is None or M.shape[0] < 2:
-            continue
-        
-        corr = np.corrcoef(M)
-        fig, ax = plt.subplots(1, 1, figsize=(6.5, 5.5), constrained_layout=True)
-        im = plot_corr_matrix_LR(ax, corr, n_left)
-        fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04).ax.set_ylabel('r', rotation=0, labelpad=10)
-        out_path = OUTDIR / f"corrmat_{ver}_{dataset}.png"
-        fig.savefig(out_path, dpi=200)
-        plt.close(fig)
-        print(f"Saved: {out_path}")
-    
-    # Run statistical tests
-    for measure in ["consistency", "identifiability", "cell_quality"]:
-        run_rm_version_only(df_all, measure_name=measure, subject_col="subject_id")
-        run_cohens_d_version_only(df_all, measure_name=measure, subject_col="subject_id")
+                            for v_other in bank.get(other, []):
+                                if v_other is None or v_other.size != m_this_pair.size:
+                                    continue
+                                rbo = pearsonr_nan(m_this_pair, v_other)
+                                if not np.isnan(rbo):
+                                    cors.append(rbo)
 
-print(f"\n{'='*60}")
-print("All datasets processed successfully!")
-print(f"{'='*60}")
+                        B_pair = np.mean(cors) if cors else np.nan
+                        I_pair = ((C_pair - B_pair) / C_pair) if (not np.isnan(B_pair) and C_pair != 0) else np.nan
+                        rows_ident.append([ver, hemi, subj, f"{sesA}_{sesB}", I_pair])
 
-# Close logger
-logger.close()
-sys.stdout = logger.terminal
+        # Create DataFrames
+        df_cons = pd.DataFrame(rows_cons, columns=["version", "hemi", "subject_id", "pair", "consistency"])
+        df_ident = pd.DataFrame(rows_ident, columns=["version", "hemi", "subject_id", "pair", "identifiability"])
+        df_quality = pd.DataFrame(rows_quality, columns=["version", "hemi", "subject_id", "session", "quality_mean", "quality_std"])
+
+        df_all = pd.concat([
+            df_cons.assign(measure="consistency", value=df_cons["consistency"])[
+                ["version", "hemi", "subject_id", "pair", "measure", "value"]],
+            df_ident.assign(measure="identifiability", value=df_ident["identifiability"])[
+                ["version", "hemi", "subject_id", "pair", "measure", "value"]],
+        ], ignore_index=True)
+
+        # Add cell quality as a measure (keep per-session for plotting, but use session as "pair")
+        df_quality_measure = df_quality.copy()
+        df_quality_measure["measure"] = "cell_quality"
+        df_quality_measure = df_quality_measure.rename(columns={"quality_mean": "value", "session": "pair"})
+
+        df_all = pd.concat([df_all, df_quality_measure[["version", "hemi", "subject_id", "pair", "measure", "value"]]],
+                           ignore_index=True)
+
+        # Save CSV
+        for version in version_dirs:
+            for measure in ["consistency", "identifiability", "cell_quality"]:
+                values = df_all.loc[(df_all["version"] == version) & (df_all["measure"] == measure), "value"]
+                if not np.isfinite(values).any():
+                    raise RuntimeError(f"No finite {measure} values for {dataset} {version}")
+        print("Computed rows by version and measure:")
+        counts_text = df_all.groupby(["version", "measure"]).size().to_string()
+        print("\n".join(line.rstrip() for line in counts_text.splitlines()))
+        csv_path = OUTDIR / f"metrics_per_subject_versions_{dataset}_pairs.csv"
+        df_all.to_csv(csv_path, index=False)
+        print(f"Wrote {csv_path}")
+
+        # Create color map for subjects
+        all_subjects = sorted(df_all["subject_id"].dropna().unique())
+        cmap = plt.get_cmap(PALETTE, max(len(all_subjects), 1))
+        color_lookup = {sid: cmap(i % cmap.N) for i, sid in enumerate(all_subjects)}
+
+        # Plot consistency
+        labels_c = [(ver,) for ver in version_dirs.keys()]
+        scatter_block(
+            df_sub=df_all[df_all["measure"] == "consistency"].rename(columns={"value": "metric"}),
+            value_col="metric",
+            labels=labels_c,
+            group_cols=["version"],
+            out_png=str(OUTDIR / f"consistency_scatter_{dataset}.png"),
+        )
+        print(f"Saved: {OUTDIR / f'consistency_scatter_{dataset}.png'}")
+
+        # Plot identifiability
+        labels_i = [(ver,) for ver in version_dirs.keys()]
+        scatter_block(
+            df_sub=df_all[df_all["measure"] == "identifiability"].rename(columns={"value": "metric"}),
+            value_col="metric",
+            labels=labels_i,
+            group_cols=["version"],
+            out_png=str(OUTDIR / f"identifiability_scatter_{dataset}.png"),
+        )
+        print(f"Saved: {OUTDIR / f'identifiability_scatter_{dataset}.png'}")
+
+        # Plot cell quality
+        labels_q = [(ver,) for ver in version_dirs.keys()]
+        scatter_block(
+            df_sub=df_all[df_all["measure"] == "cell_quality"].rename(columns={"value": "metric"}),
+            value_col="metric",
+            labels=labels_q,
+            group_cols=["version"],
+            out_png=str(OUTDIR / f"cellquality_scatter_{dataset}.png"),
+        )
+        print(f"Saved: {OUTDIR / f'cellquality_scatter_{dataset}.png'}")
+
+        # Plot correlation matrices
+        for ver in version_dirs.keys():
+            ids_L, means_L = collect_subj_overall_means_for(ver, "L", overall_means, subjects)
+            ids_R, means_R = collect_subj_overall_means_for(ver, "R", overall_means, subjects)
+
+            if len(means_L) + len(means_R) < 2:
+                continue
+
+            # Combine L and R
+            blocks = []
+            if len(means_L) > 0:
+                blocks.append(np.vstack(means_L))
+            n_left = blocks[0].shape[0] if blocks else 0
+            if len(means_R) > 0:
+                blocks.append(np.vstack(means_R))
+
+            M = np.vstack(blocks) if blocks else None
+            if M is None or M.shape[0] < 2:
+                continue
+
+            corr = np.corrcoef(M)
+            fig, ax = plt.subplots(1, 1, figsize=(6.5, 5.5), constrained_layout=True)
+            im = plot_corr_matrix_LR(ax, corr, n_left)
+            fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04).ax.set_ylabel('r', rotation=0, labelpad=10)
+            out_path = OUTDIR / f"corrmat_{ver}_{dataset}.png"
+            fig.savefig(out_path, dpi=200)
+            plt.close(fig)
+            print(f"Saved: {out_path}")
+
+        # Run statistical tests
+        for measure in ["consistency", "identifiability", "cell_quality"]:
+            run_rm_version_only(df_all, measure_name=measure, subject_col="subject_id")
+            run_cohens_d_version_only(df_all, measure_name=measure, subject_col="subject_id")
+
+    print(f"\n{'='*60}")
+    print("All datasets processed successfully!")
+    print(f"{'='*60}")
+
+def check_inputs():
+    """Report coverage and smoke-check the actual geometry/VTK dependencies."""
+    coverage = []
+    for dataset in DATASETS:
+        subjects = (SCRIPT_DIR / dataset / "participants.txt").read_text().split()
+        sessions = sorted({s for pair in DATASET_SESSION_CONFIG[dataset] for s in pair})
+        for version, root in get_version_dirs(dataset).items():
+            if not root.is_dir():
+                raise FileNotFoundError(f"Missing {version} derivatives: {root}")
+            available = []
+            for subject in subjects:
+                for session in sessions:
+                    for hemi in HEMI_ORDER:
+                        surfaces_ok = all(find_surface(root, subject, session, hemi, label) is not None for label in LABELS)
+                        affine_ok = affine_for(dataset, subject, session) is not None
+                        coverage.append(dict(dataset=dataset, version=version, subject=subject,
+                                             session=session, hemi=hemi, surfaces_present=surfaces_ok,
+                                             affine_readable=affine_ok))
+                        if surfaces_ok and affine_ok:
+                            available.append((subject, session, hemi))
+            print(f"Input coverage {dataset} {version}: {len(available)}/{len(subjects) * len(sessions) * len(HEMI_ORDER)} subject/session/hemisphere entries", flush=True)
+            if not available:
+                raise RuntimeError(f"No usable inputs for {dataset} {version}")
+            if version == "v2.4.0" and len(available) != len(subjects) * len(sessions) * len(HEMI_ORDER):
+                raise RuntimeError(f"Incomplete new derivatives or missing affines for {dataset}; see input coverage")
+            subject, session, hemi = available[0]
+            vector = get_session_vector(root, dataset, subject, session, hemi)
+            quality, _ = compute_cell_quality_for_session(root, dataset, subject, session, hemi)
+            if vector is None or not np.isfinite(vector).all() or quality is None or not np.isfinite(quality):
+                raise RuntimeError(f"Geometry smoke check failed for {dataset} {version}")
+            print(f"Geometry check {dataset} {version}: {vector.size} coordinates; scaled Jacobian={quality:.6g}", flush=True)
+    pd.DataFrame(coverage).to_csv(OUTDIR / "input_coverage.csv", index=False)
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Compare the existing v1 baseline with HippUnfold v2.4.0.")
+    parser.add_argument("--check-inputs", action="store_true", help="Verify paths and dependencies without regenerating figures.")
+    args = parser.parse_args()
+    OUTDIR.mkdir(parents=True, exist_ok=True)
+    log_file = OUTDIR / ("input_check_log.txt" if args.check_inputs else "analysis_log.txt")
+    logger = Logger(log_file)
+    sys.stdout = logger
+    try:
+        print(f"Log file: {log_file}", flush=True)
+        print(f"PyVista: {pv.__version__}; comparison roots: {get_version_dirs(DATASETS[0])}", flush=True)
+        check_inputs()
+        if not args.check_inputs:
+            run_analysis()
+            for dataset in DATASETS:
+                (OUTDIR / f"corrmat_v2.0.0_{dataset}.png").unlink(missing_ok=True)
+            print("Comparison finished; obsolete v2.0.0 correlation matrices removed.", flush=True)
+    finally:
+        sys.stdout = logger.terminal
+        logger.close()
+
+
+if __name__ == "__main__":
+    main()
